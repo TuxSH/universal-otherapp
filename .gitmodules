@@ -1,0 +1,3 @@
+[submodule "kernelhaxcode_3ds"]
+	path = kernelhaxcode_3ds
+	url = https://github.com/TuxSH/kernelhaxcode_3ds.git

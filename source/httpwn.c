@@ -109,7 +109,7 @@ Result httpwn(Handle *outHandle, u32 *outSelfSbufId, u32 *outAlignedBuffer, void
 
     // We now have static buffer #4 covering its descriptor (tls+0x180+0x20), sz=0x40
     *outHandle = httpServerHandle;
-    *outSelfSbufId = 5;
+    *outSelfSbufId = 4;
     *outAlignedBuffer = 0x1FFA0000; // tls+0x00 is unused, AFAIK
 
     // Let things leak, we don't really care

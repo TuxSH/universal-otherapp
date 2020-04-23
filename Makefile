@@ -27,7 +27,7 @@ INCLUDES	:=	include
 #---------------------------------------------------------------------------------
 ARCH	:=	-march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
 
-CFLAGS	:=	-g -Wall -Wextra -Wno-main -O0 -mword-relocations -fomit-frame-pointer \
+CFLAGS	:=	-g -Wall -Wextra -Wno-main -O2 -mword-relocations -fomit-frame-pointer \
 			-ffunction-sections -fdata-sections \
 			$(ARCH)
 
@@ -59,14 +59,15 @@ export TOPDIR	:=	$(CURDIR)
 
 export VPATH	:=	$(foreach dir,$(SOURCES),$(CURDIR)/$(dir)) \
 			$(foreach dir,$(GRAPHICS),$(CURDIR)/$(dir)) \
-			$(foreach dir,$(DATA),$(CURDIR)/$(dir))
+			$(foreach dir,$(DATA),$(CURDIR)/$(dir)) \
+			$(TOPDIR)/kernelhaxcode_3ds
 
 export DEPSDIR	:=	$(CURDIR)/$(BUILD)
 
 CFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
 CPPFILES	:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
 SFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
-BINFILES	:=	$(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.*)))
+BINFILES	:=	$(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.*))) kernelhaxcode_3ds.bin
 
 #---------------------------------------------------------------------------------
 # use CXX for linking C++ projects, CC for standard C
@@ -96,13 +97,16 @@ export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
 
 export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib)
 
-.PHONY: all clean
+.PHONY: all clean check_kernelhaxcode_3ds
 
 #---------------------------------------------------------------------------------
-all: $(BUILD) $(GFXBUILD) $(DEPSDIR)
+all: $(BUILD) $(DEPSDIR)
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
-$(BUILD):
+check_kernelhaxcode_3ds:
+	@$(MAKE) -C kernelhaxcode_3ds all
+
+$(BUILD): check_kernelhaxcode_3ds
 	@mkdir -p $@
 
 ifneq ($(DEPSDIR),$(BUILD))
@@ -113,7 +117,8 @@ endif
 #---------------------------------------------------------------------------------
 clean:
 	@echo clean ...
-	@rm -fr $(BUILD) $(TARGET).bin $(TARGET).elf $(GFXBUILD)
+	@$(MAKE) -C $(TOPDIR)/kernelhaxcode_3ds clean
+	@rm -fr $(BUILD) $(TARGET).bin $(TARGET).elf
 
 #---------------------------------------------------------------------------------
 else
@@ -124,12 +129,12 @@ $(OUTPUT).bin: $(OUTPUT).elf
 	$(OBJCOPY) -S -O binary $< $@
 	@echo built ... $(notdir $@)
 
+$(OFILES_SOURCES) : $(HFILES)
+
 $(OUTPUT).elf: $(OFILES)
 	@echo linking $(notdir $@)
 	$(LD) $(LDFLAGS) $(OFILES) $(LIBPATHS) $(LIBS) -o $@
 	@$(NM) -CSn $@ > $(notdir $*.lst)
-
-$(OFILES_SOURCES) : $(HFILES)
 
 #---------------------------------------------------------------------------------
 # you need a rule like this for each extension you use as binary data
