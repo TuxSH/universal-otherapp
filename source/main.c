@@ -26,7 +26,7 @@ static Result doExploitChain(ExploitChainLayout *layout, Handle gspHandle)
     TRY(httpwn(&httpcHandle, &selfSbufId, &alignedHttpBuffer, layout->workBuf, layout->hole, gspHandle));
     TRY(lazyPixie(&layout->blobLayout, httpcHandle, selfSbufId, alignedHttpBuffer));
 
-    return khc3dsRunExploitChain();
+    return khc3dsTakeover("SafeB9SInstaller.bin", 0);
 }
 
 Result otherappMain(u32 paramBlk)
