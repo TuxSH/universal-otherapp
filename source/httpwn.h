@@ -2,4 +2,4 @@
 
 #include "lib/defines.h"
 
-Result httpwn(Handle *outHandle, u32 *outSelfSbufId, u32 *outAlignedBuffer, void *linearWorkbuf, void *hole, Handle gspHandle);
+Result httpwn(Handle *outHandle, u32 baseSbufId, void *linearWorkbuf, void *hole, const u32 *sbufs, u32 numSbufs, Handle gspHandle);

