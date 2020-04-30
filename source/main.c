@@ -13,7 +13,6 @@ typedef struct ExploitChainLayout {
     BlobLayout blobLayout;
 } ExploitChainLayout;
 
-
 static Result doExploitChain(ExploitChainLayout *layout, Handle gspHandle)
 {
     Handle httpcHandle;

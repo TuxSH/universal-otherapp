@@ -17,7 +17,7 @@ static inline u32 convertLinearMemToPhys(const void *addr)
     u32 vaddr = (u32)addr;
     switch (vaddr) {
         case 0x14000000 ... 0x1C000000 - 1: return vaddr + 0x0C000000; // LINEAR heap
-        case 0x30000000 ... 0x40000000 - 1: return vaddr + 0x10000000; // v8.x+ LINEAR heap
+        case 0x30000000 ... 0x40000000 - 1: return vaddr - 0x10000000; // v8.x+ LINEAR heap
         default: return 0;
     }
 }
@@ -25,4 +25,10 @@ static inline u32 convertLinearMemToPhys(const void *addr)
 static inline void __dsb(void)
 {
     __asm__ __volatile__ ("mcr p15, 0, %0, c7, c10, 4" :: "r" (0) : "memory");
+}
+
+static inline void __flush_prefetch_buffer(void)
+{
+    // Similar to isb in newer Arm architecture versions
+    __asm__ __volatile__ ("mcr p15, 0, %0, c7, c5, 4" :: "r" (0) : "memory");
 }

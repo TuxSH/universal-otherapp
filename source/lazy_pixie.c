@@ -34,7 +34,9 @@ Result lazyPixie(BlobLayout *layout, Handle handle, u32 selfSbufId, u32 alignedB
     cmdbuf[3] = (u32)sbufs;
     TRY(svcSendSyncRequest(handle));
 
-    __dsb(); // Apparently slapping dsb solves the few crashes/tlb issues I'm having
+    __dsb();
+    __flush_prefetch_buffer();
+
     // Trigger the kernel arbwrite
     u32 numCores = IS_N3DS ? 4 : 2;
     cmdbuf[0] = IPC_MakeHeader(0xCAFE, 3, 2 + 2 * numCores);
@@ -47,8 +49,12 @@ Result lazyPixie(BlobLayout *layout, Handle handle, u32 selfSbufId, u32 alignedB
     }
 
     __dsb();
+    __flush_prefetch_buffer();
+
     TRY(svcSendSyncRequest(handle));
+
     __dsb();
+    __flush_prefetch_buffer();
 
     return res;
 }
