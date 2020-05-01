@@ -6,17 +6,17 @@ u32 lazyPixiePrepareStaticBufferDescriptors(u32 *sbufs, u32 baseId)
 
     // Here we create a MMU entry, L1 entry mapping a page table (client will set bits 1 and 0 accordingly), to map MAP_ADDR
     sbufs[0] = IPC_Desc_StaticBuffer(0, id++); // size = 0 because the kernel doesn't care when writing & avoids a va2pa that would lead to a crash
-    sbufs[1] = KERNVA2PA(0x1FFF8000) + (MAP_ADDR >> 20) * 4;
+    sbufs[1] = KERNPA2VA(0x1FFF8000) + (MAP_ADDR >> 20) * 4;
 
     sbufs[2] = IPC_Desc_StaticBuffer(0, id++); // size = 0 because the kernel doesn't care when writing & avoids a va2pa that would lead to a crash
-    sbufs[3] = KERNVA2PA(0x1FFFC000) + (MAP_ADDR >> 20) * 4;
+    sbufs[3] = KERNPA2VA(0x1FFFC000) + (MAP_ADDR >> 20) * 4;
 
     // N3DS-only, the following static buffers won't be used on O3DS:
     sbufs[4] = IPC_Desc_StaticBuffer(0, id++); // size = 0 because the kernel doesn't care when writing & avoids a va2pa that would lead to a crash
-    sbufs[5] = KERNVA2PA(0x1F3FC000) + (MAP_ADDR >> 20) * 4;
+    sbufs[5] = KERNPA2VA(0x1F3FC000) + (MAP_ADDR >> 20) * 4;
 
     sbufs[6] = IPC_Desc_StaticBuffer(0, id++); // size = 0 because the kernel doesn't care when writing & avoids a va2pa that would lead to a crash
-    sbufs[7] = KERNVA2PA(0x1FFF7000) + (MAP_ADDR >> 20) * 4;
+    sbufs[7] = KERNPA2VA(0x1FFF7000) + (MAP_ADDR >> 20) * 4;
 
     return 4;
 }

@@ -14,7 +14,7 @@ static s32 kMapL2Table(void)
 
     // For each core, create a MMU entry, L1 entry mapping a page table, to map MAP_ADDR
     for (u32 i = 0; i < numCores; i++) {
-        vu32 *table = (u32 *)KERNVA2PA(l1tables[i]);
+        vu32 *table = (u32 *)KERNPA2VA(l1tables[i]);
         table[MAP_ADDR >> 20] = convertLinearMemToPhys(layout->l2table) | 1;
     }
 
