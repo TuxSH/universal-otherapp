@@ -36,6 +36,7 @@ static Result doExploitChain(ExploitChainLayout *layout, Handle gspHandle, const
         TRY(memchunkhax(&layout->blobLayout, layout->workBuf, gspHandle));
     } else {
         // Above 9.3 -- pwn http (target TLS addresses are hard to guess below 4.x) and use LazyPixie
+        // NOTE: this can be used without any required change from at least system version 4.2
         baseSbufId = 4; // needs to be >= 4
         numSbufs = lazyPixiePrepareStaticBufferDescriptors(sbufs, baseSbufId);
         TRY(httpwn(&handle, baseSbufId, layout->workBuf + 0x1000, layout->workBuf, sbufs, numSbufs, gspHandle));

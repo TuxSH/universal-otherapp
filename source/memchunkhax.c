@@ -23,9 +23,19 @@ static s32 kMapL2Table(void)
 
 static Result doMemchunkhax(u32 val1, u32 val2, void *workBuffer, Handle gspHandle)
 {
+    /* pseudo-code:
+    * if(val2)
+    * {
+    *    *(u32*)val1 = val2;
+    *    *(u32*)(val2 + 8) = (val1 - 4);
+    * }
+    * else
+    *    *(u32*)val1 = 0x0;
+    */
+
     Result res = 0;
 
-    // Adapted from https://github.com/hax0kartik/pre9otherapp/blob/master/source/exploits/memchunkhax.c
+    // Adapted from https://github.com/aliaspider/svchax/blob/master/svchax.c#L404
     // See also: https://www.3dbrew.org/wiki/MemoryBlockHeader
 
     u32 bufVa = (u32)workBuffer;
