@@ -14,7 +14,7 @@ typedef struct ExploitChainLayout {
     BlobLayout blobLayout;
 } ExploitChainLayout;
 
-static Result doExploitChain(ExploitChainLayout *layout, Handle gspHandle)
+static Result doExploitChain(ExploitChainLayout *layout, Handle gspHandle, const char *payloadFileName, size_t payloadFileOffset)
 {
     Result res = 0;
 
@@ -49,13 +49,28 @@ static Result doExploitChain(ExploitChainLayout *layout, Handle gspHandle)
     TRY(GSPGPU_FlushDataCache(gspHandle, layout, 0x700000));
 
     khc3dsLcdDebug(true, 255, 0, 0);
-    return khc3dsTakeover("SafeB9SInstaller.bin", 0);
+    return khc3dsTakeover(payloadFileName, payloadFileOffset);
 }
 
-Result otherappMain(u32 paramBlk)
+Result otherappMain(u32 paramBlkAddr)
 {
-    Handle gspHandle = **(Handle **)(paramBlk + 0x58);
-    ExploitChainLayout *layout = (ExploitChainLayout *)((paramBlk + 0x1000) & ~0xFFF);
+    const char *arm9PayloadFileName;
+    size_t arm9PayloadFileOffset;
 
-    return doExploitChain(layout, gspHandle);
+    // Standard otherapp stuff:
+    Handle gspHandle = **(Handle **)(paramBlkAddr + 0x58);
+
+    // Custom stuff:
+    u32 arm9ParamMagic = *(u32 *)(paramBlkAddr + 0xEF8);
+    if (arm9ParamMagic == 0xC0DE0009) {
+        arm9PayloadFileOffset = *(size_t *)(paramBlkAddr + 0xEFC);
+        arm9PayloadFileName = (const char *)(paramBlkAddr + 0xF00); // max 255 characters
+    } else {
+        arm9PayloadFileOffset = 0;
+        arm9PayloadFileName = "SafeB9SInstaller.bin";
+    }
+
+    ExploitChainLayout *layout = (ExploitChainLayout *)((paramBlkAddr + 0x1000) & ~0xFFF);
+
+    return doExploitChain(layout, gspHandle, arm9PayloadFileName, arm9PayloadFileOffset);
 }
