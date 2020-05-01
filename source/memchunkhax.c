@@ -1,8 +1,6 @@
 #include "memchunkhax.h"
 #include "lib/gsp.h"
 
-void panik(u32 x);
-
 static s32 kMapL2Table(void)
 {
     // Disable interrupts asap (svcBackdoor sucks)
@@ -19,9 +17,6 @@ static s32 kMapL2Table(void)
         vu32 *table = (u32 *)KERNVA2PA(l1tables[i]);
         table[MAP_ADDR >> 20] = convertLinearMemToPhys(layout->l2table) | 1;
     }
-
-    __dsb();
-    __flush_prefetch_buffer();
 
     return 0;
 }
@@ -105,6 +100,9 @@ Result memchunkhax(BlobLayout *layout, void *workBuffer, Handle gspHandle)
     // Do the thing:
     *scratch = (u32)layout;
     svcBackdoor(kMapL2Table);
+
+    __dsb();
+    __flush_prefetch_buffer();
 
     return res;
 }

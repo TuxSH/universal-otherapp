@@ -52,6 +52,12 @@ static Result doExploitChain(ExploitChainLayout *layout, Handle gspHandle)
         TRY(lazyPixieTriggerArbwrite(&layout->blobLayout, handle, baseSbufId));
     }
 
+    // https://developer.arm.com/docs/ddi0360/e/memory-management-unit/hardware-page-table-translation
+    // "MPCore hardware page table walks do not cause a read from the level one Unified/Data Cache"
+    // Trigger full DCache + L2C flush using this cute little trick (just need to pass a size value higher than the cache size)
+    // (but not too high; dcache+l2c size on n3ds is 0x700000; and any non-null userland addr)
+    TRY(GSPGPU_FlushDataCache(gspHandle, layout, 0x700000));
+
     khc3dsLcdDebug(true, 255, 0, 0);
     return khc3dsTakeover("SafeB9SInstaller.bin", 0);
 }
