@@ -9,16 +9,6 @@
 
 #include "kernelhaxcode_3ds_bin.h"
 
-
-// 4.x kernel patch for kernelpanic, TODO: remove later
-/*
-s32 kernPatch(void)
-{
-    *(vu32 *)(0xEFF80000 + 0x1A008) = 0xE12FFF7E;
-    return 0;
-}*/
-
-
 typedef struct ExploitChainLayout {
     u8 workBuf[0x10000];
     BlobLayout blobLayout;
@@ -40,8 +30,8 @@ static Result doExploitChain(ExploitChainLayout *layout, Handle gspHandle)
     // Ensure the entire contents of 'layout->blobLayout' are written back into main memory
     TRY(GSPGPU_FlushDataCache(gspHandle, &layout->blobLayout, sizeof(BlobLayout)));
 
-    u8 kernelMinorVersion = *(vu8 *)0x1FF80062;
-    if (kernelMinorVersion < 48) {
+    u8 kernelVersionMinor = KERNEL_VERSION_MINOR;
+    if (kernelVersionMinor < 48) {
         // Below 9.3 -- memchunkhax
         TRY(memchunkhax(&layout->blobLayout, layout->workBuf, gspHandle));
     } else {
@@ -55,7 +45,7 @@ static Result doExploitChain(ExploitChainLayout *layout, Handle gspHandle)
     // https://developer.arm.com/docs/ddi0360/e/memory-management-unit/hardware-page-table-translation
     // "MPCore hardware page table walks do not cause a read from the level one Unified/Data Cache"
     // Trigger full DCache + L2C flush using this cute little trick (just need to pass a size value higher than the cache size)
-    // (but not too high; dcache+l2c size on n3ds is 0x700000; and any non-null userland addr)
+    // (but not too high; dcache+l2c size on n3ds is 0x700000; and any non-null userland addr gsp accepts)
     TRY(GSPGPU_FlushDataCache(gspHandle, layout, 0x700000));
 
     khc3dsLcdDebug(true, 255, 0, 0);
