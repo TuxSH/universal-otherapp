@@ -15,7 +15,7 @@ static s32 kMapL2Table(void)
     // For each core, create a MMU entry, L1 entry mapping a page table, to map MAP_ADDR
     for (u32 i = 0; i < numCores; i++) {
         vu32 *table = (u32 *)KERNPA2VA(l1tables[i]);
-        table[MAP_ADDR >> 20] = convertLinearMemToPhys(layout->l2table) | 1;
+        table[KHC3DS_MAP_ADDR >> 20] = convertLinearMemToPhys(layout->l2table) | 1;
     }
 
     return 0;
@@ -51,11 +51,12 @@ static Result doMemchunkhax(u32 val1, u32 val2, void *workBuffer, Handle gspHand
     TRY(svcControlMemory(&tmp, bufVa + 0x3000, 0, 0x2000, MEMOP_FREE, MEMPERM_DONTCARE));
     TRY(svcControlMemory(&tmp, bufVa + 0x6000, 0, 0x1000, MEMOP_FREE, MEMPERM_DONTCARE));
 
-    TRY(GSPGPU_FlushDataCache(gspHandle, workBuffer, 0x10000));
+    // Trigger full dcache clean-invalidate using the size trick
+    TRY(GSPGPU_FlushDataCache(gspHandle, workBuffer, 0x700000));
     TRY(gspwn(gspHandle, bufPa + 0x0000, bufPa + 0x1000, 16));
     TRY(gspwn(gspHandle, bufPa + 0x2000, bufPa + 0x3000, 16));
     TRY(gspwn(gspHandle, bufPa + 0x5000, bufPa + 0x6000, 16));
-    TRY(GSPGPU_FlushDataCache(gspHandle, workBuffer, 0x10000));
+    TRY(GSPGPU_FlushDataCache(gspHandle, workBuffer, 0x700000));
 
     *nextPtr1 = *nextPtr3;
     *prevPtr6 = *prevPtr3;
@@ -63,16 +64,16 @@ static Result doMemchunkhax(u32 val1, u32 val2, void *workBuffer, Handle gspHand
     *prevPtr3 = val1 - 4;
     *nextPtr3 = val2;
 
-    TRY(GSPGPU_FlushDataCache(gspHandle, workBuffer, 0x10000));
+    TRY(GSPGPU_FlushDataCache(gspHandle, workBuffer, 0x700000));
     TRY(gspwn(gspHandle, bufPa + 0x3000, bufPa + 0x2000, 16));
-    TRY(GSPGPU_FlushDataCache(gspHandle, workBuffer, 0x10000));
+    TRY(GSPGPU_FlushDataCache(gspHandle, workBuffer, 0x700000));
 
     TRY(svcControlMemory(&tmp, 0, 0, 0x2000, MEMOP_ALLOC_LINEAR, MEMPERM_READ | MEMPERM_WRITE));
 
-    TRY(GSPGPU_FlushDataCache(gspHandle, workBuffer, 0x10000));
+    TRY(GSPGPU_FlushDataCache(gspHandle, workBuffer, 0x700000));
     TRY(gspwn(gspHandle, bufPa + 0x1000, bufPa + 0x0000, 16));
     TRY(gspwn(gspHandle, bufPa + 0x6000, bufPa + 0x5000, 16));
-    TRY(GSPGPU_FlushDataCache(gspHandle, workBuffer, 0x10000));
+    TRY(GSPGPU_FlushDataCache(gspHandle, workBuffer, 0x700000));
 
     TRY(svcControlMemory(&tmp, bufVa + 0x0000, 0, 0x1000, MEMOP_FREE, MEMPERM_DONTCARE));
     TRY(svcControlMemory(&tmp, bufVa + 0x2000, 0, 0x4000, MEMOP_FREE, MEMPERM_DONTCARE));
