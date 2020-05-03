@@ -29,7 +29,7 @@ Result lazyPixieTriggerArbwrite(BlobLayout *layout, Handle handle, u32 baseSbufI
     // We assume our static buffers descriptors have already been injected
     // Trigger the kernel arbwrite
     u32 numCores = IS_N3DS ? 4 : 2;
-    cmdbuf[0] = IPC_MakeHeader(0xCAFE, 0, 2 + 2 * numCores);
+    cmdbuf[0] = IPC_MakeHeader(0xCAFE, 0, 2 * numCores);
     for (u32 i = 0; i < numCores; i++) {
         cmdbuf[1 + 2 * i]       = IPC_Desc_PXIBuffer(4, baseSbufId + i, false);
         cmdbuf[1 + 2 * i + 1]   = (u32)layout->l2table | 1; // P=0 Domain=0000 (client), coarse page table
