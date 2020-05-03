@@ -39,7 +39,7 @@ static Result doExploitChain(ExploitChainLayout *layout, Handle gspHandle, const
         // NOTE: this can be used without any required change from at least system version 4.2
         baseSbufId = 4; // needs to be >= 4
         numSbufs = lazyPixiePrepareStaticBufferDescriptors(sbufs, baseSbufId);
-        TRY(httpwn(&handle, baseSbufId, layout->workBuf + 0x1000, layout->workBuf, sbufs, numSbufs, gspHandle));
+        TRY(httpwn(&handle, baseSbufId, layout->workBuf, sbufs, numSbufs, gspHandle));
         TRY(lazyPixieTriggerArbwrite(&layout->blobLayout, handle, baseSbufId));
     }
 

