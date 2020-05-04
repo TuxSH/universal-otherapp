@@ -22,5 +22,6 @@ Need to disable firmlaunch patches if using Luma3DS.
 
 ## Credits
 
+* @zoogie: testing and debugging on exotic firmware versions
 * @fincs: LazyPixie exploitation ideas, etc.
 * @aliaspider: memchunkhax code
