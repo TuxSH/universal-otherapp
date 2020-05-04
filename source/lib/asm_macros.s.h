@@ -1,3 +1,6 @@
+.arm
+.cpu        mpcore
+
 .macro FUNCTION name, section=.text\.name
     .section        \section, "ax", %progbits
     .align          3

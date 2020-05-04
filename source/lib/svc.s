@@ -1,9 +1,6 @@
 // Adapted from libctru
 
-#include "asm_macros.s"
-
-.arm
-.align 4
+#include "asm_macros.s.h"
 
 .macro SVC_BEGIN name
 	FUNCTION \name

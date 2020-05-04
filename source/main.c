@@ -49,7 +49,7 @@ static Result doExploitChain(ExploitChainLayout *layout, Handle gspHandle, const
     // (but not too high; dcache+l2c size on n3ds is 0x700000; and any non-null userland addr gsp accepts)
     TRY(GSPGPU_FlushDataCache(gspHandle, layout, 0x700000));
 
-    khc3dsLcdDebug(true, 255, 0, 0);
+    khc3dsLcdDebug(true, 128, 64, 0);
     return khc3dsTakeover(payloadFileName, payloadFileOffset);
 }
 

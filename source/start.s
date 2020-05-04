@@ -1,4 +1,4 @@
-#include "lib/asm_macros.s"
+#include "lib/asm_macros.s.h"
 
 FUNCTION _start, .crt0
     mov     sp, #0x10000000

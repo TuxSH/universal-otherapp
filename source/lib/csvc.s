@@ -14,20 +14,17 @@
 @    Altered source versions must be plainly marked as such, and must not be misrepresented as being the original software.
 @    This notice may not be removed or altered from any source distribution.
 
+#include "asm_macros.s.h"
+
 .arm
-.balign 4
+.align 4
 
 .macro SVC_BEGIN name
-    .section .text.\name, "ax", %progbits
-    .global \name
-    .type \name, %function
-    .align 2
-    .cfi_startproc
-\name:
+	FUNCTION \name
 .endm
 
 .macro SVC_END
-    .cfi_endproc
+	END_FUNCTION
 .endm
 
 SVC_BEGIN svcCustomBackdoor
