@@ -13,10 +13,10 @@ u32 lazyPixiePrepareStaticBufferDescriptors(u32 *sbufs, u32 baseId)
 
     // N3DS-only, the following static buffers won't be used on O3DS:
     sbufs[4] = IPC_Desc_StaticBuffer(0, id++); // size = 0 because the kernel doesn't care when writing & avoids a va2pa that would lead to a crash
-    sbufs[5] = KERNPA2VA(0x1F3FC000) + (KHC3DS_MAP_ADDR >> 20) * 4;
+    sbufs[5] = KERNPA2VA(0x1F3F8000) + (KHC3DS_MAP_ADDR >> 20) * 4;
 
     sbufs[6] = IPC_Desc_StaticBuffer(0, id++); // size = 0 because the kernel doesn't care when writing & avoids a va2pa that would lead to a crash
-    sbufs[7] = KERNPA2VA(0x1FFF7000) + (KHC3DS_MAP_ADDR >> 20) * 4;
+    sbufs[7] = KERNPA2VA(0x1F3FC000) + (KHC3DS_MAP_ADDR >> 20) * 4;
 
     return 4;
 }

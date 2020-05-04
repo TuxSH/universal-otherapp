@@ -6,7 +6,7 @@ static s32 kMapL2Table(void)
     // Disable interrupts asap (svcBackdoor sucks)
     __asm__ __volatile__ ("cpsid aif" ::: "memory");
 
-    static const u32 l1tables[] = { 0x1FFF8000, 0x1FFFC000, 0x1F3FC000, 0x1FFF7000 };
+    static const u32 l1tables[] = { 0x1FFF8000, 0x1FFFC000, 0x1F3F8000, 0x1F3FC000 };
     u32 numCores = IS_N3DS ? 4 : 2;
 
     // Fetch layout from scratch area
