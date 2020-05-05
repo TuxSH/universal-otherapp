@@ -25,11 +25,26 @@ INCLUDES	:=	include
 #---------------------------------------------------------------------------------
 # options for code generation
 #---------------------------------------------------------------------------------
+
+DEFINES	:=
+
+ifneq ($(DEFAULT_PAYLOAD_FILE_OFFSET),)
+	DEFINES += -DDEFAULT_PAYLOAD_FILE_OFFSET=$(DEFAULT_PAYLOAD_FILE_OFFSET)
+endif
+
+ifneq ($(DEFAULT_PAYLOAD_FILE_NAME),)
+	DEFINES += -DDEFAULT_PAYLOAD_FILE_NAME=\"$(DEFAULT_PAYLOAD_FILE_NAME)\"
+endif
+
+ifneq ($(MEMCHUNKHAX_ONLY),)
+	DEFINES += -DMEMCHUNKHAX_ONLY
+endif
+
 ARCH	:=	-march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
 
 CFLAGS	:=	-g -Wall -Wextra -Wno-main -O2 -mword-relocations -fomit-frame-pointer \
 			-ffunction-sections -fdata-sections \
-			$(ARCH)
+			$(DEFINES) $(ARCH)
 
 CFLAGS	+=	$(INCLUDE) -DARM11 -D_3DS
 
