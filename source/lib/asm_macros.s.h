@@ -1,9 +1,9 @@
 .arm
 .cpu        mpcore
 
-.macro FUNCTION name, section=.text\.name
-    .section        \section, "ax", %progbits
-    .align          3
+.macro FUNCTION name, section=.text
+    .section        \section\().\name, "ax", %progbits
+    .align          2
     .global         \name
     .type           \name, %function
     .func           \name
