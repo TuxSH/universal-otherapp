@@ -10,7 +10,7 @@ static s32 kMapL2Table(void)
     u32 numCores = IS_N3DS ? 4 : 2;
 
     // Fetch layout from scratch area
-    BlobLayout *layout = *(BlobLayout **)getThreadCommandBuffer();
+    const BlobLayout *layout = *(const BlobLayout **)getThreadCommandBuffer();
 
     // For each core, create a MMU entry, L1 entry mapping a page table, to map MAP_ADDR
     for (u32 i = 0; i < numCores; i++) {
@@ -52,11 +52,11 @@ static Result doMemchunkhax(u32 val1, u32 val2, void *workBuffer, Handle gspHand
     TRY(svcControlMemory(&tmp, bufVa + 0x6000, 0, 0x1000, MEMOP_FREE, MEMPERM_DONTCARE));
 
     // Trigger full dcache clean-invalidate using the size trick
-    TRY(GSPGPU_FlushDataCache(gspHandle, workBuffer, 0x700000));
-    TRY(gspwn(gspHandle, bufPa + 0x0000, bufPa + 0x1000, 16));
-    TRY(gspwn(gspHandle, bufPa + 0x2000, bufPa + 0x3000, 16));
-    TRY(gspwn(gspHandle, bufPa + 0x5000, bufPa + 0x6000, 16));
-    TRY(GSPGPU_FlushDataCache(gspHandle, workBuffer, 0x700000));
+    gspDoFullCleanInvCacheTrick(gspHandle);
+    gspwn(gspHandle, bufPa + 0x0000, bufPa + 0x1000, 16);
+    gspwn(gspHandle, bufPa + 0x2000, bufPa + 0x3000, 16);
+    gspwn(gspHandle, bufPa + 0x5000, bufPa + 0x6000, 16);
+    gspDoFullCleanInvCacheTrick(gspHandle);
 
     *nextPtr1 = *nextPtr3;
     *prevPtr6 = *prevPtr3;
@@ -64,16 +64,16 @@ static Result doMemchunkhax(u32 val1, u32 val2, void *workBuffer, Handle gspHand
     *prevPtr3 = val1 - 4;
     *nextPtr3 = val2;
 
-    TRY(GSPGPU_FlushDataCache(gspHandle, workBuffer, 0x700000));
-    TRY(gspwn(gspHandle, bufPa + 0x3000, bufPa + 0x2000, 16));
-    TRY(GSPGPU_FlushDataCache(gspHandle, workBuffer, 0x700000));
+    gspDoFullCleanInvCacheTrick(gspHandle);
+    gspwn(gspHandle, bufPa + 0x3000, bufPa + 0x2000, 16);
+    gspDoFullCleanInvCacheTrick(gspHandle);
 
     TRY(svcControlMemory(&tmp, 0, 0, 0x2000, MEMOP_ALLOC_LINEAR, MEMPERM_READ | MEMPERM_WRITE));
 
-    TRY(GSPGPU_FlushDataCache(gspHandle, workBuffer, 0x700000));
-    TRY(gspwn(gspHandle, bufPa + 0x1000, bufPa + 0x0000, 16));
-    TRY(gspwn(gspHandle, bufPa + 0x6000, bufPa + 0x5000, 16));
-    TRY(GSPGPU_FlushDataCache(gspHandle, workBuffer, 0x700000));
+    gspDoFullCleanInvCacheTrick(gspHandle);
+    gspwn(gspHandle, bufPa + 0x1000, bufPa + 0x0000, 16);
+    gspwn(gspHandle, bufPa + 0x6000, bufPa + 0x5000, 16);
+    gspDoFullCleanInvCacheTrick(gspHandle);
 
     TRY(svcControlMemory(&tmp, bufVa + 0x0000, 0, 0x1000, MEMOP_FREE, MEMPERM_DONTCARE));
     TRY(svcControlMemory(&tmp, bufVa + 0x2000, 0, 0x4000, MEMOP_FREE, MEMPERM_DONTCARE));
@@ -92,7 +92,7 @@ static u32 leakCurThreadKernelStackAddr(void)
     return (u32)(out & ~0xFFF);
 }
 
-Result memchunkhax(BlobLayout *layout, void *workBuffer, Handle gspHandle)
+Result memchunkhax(const BlobLayout *layout, void *workBuffer, Handle gspHandle)
 {
     (void)layout;
 

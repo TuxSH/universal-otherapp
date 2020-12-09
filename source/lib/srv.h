@@ -19,3 +19,16 @@ Result srvGetServiceHandle(Handle handle, Handle* out, const char* name);
 
 /// Registers the current process as a client to the service API.
 Result srvRegisterClient(Handle handle);
+
+/**
+ * @brief Registers a port.
+ * @param name Name of the port.
+ * @param clientHandle Client handle of the port.
+ */
+Result srvRegisterPort(Handle handle, const char* name, Handle clientHandle);
+
+/**
+ * @brief Unregisters a port.
+ * @param name Name of the port.
+ */
+Result srvUnregisterPort(Handle handle, const char* name);

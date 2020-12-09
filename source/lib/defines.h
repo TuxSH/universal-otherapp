@@ -1,5 +1,6 @@
 #pragma once
 
+#include <limits.h>
 #include <string.h>
 #include "ipc.h"
 #include "result.h"

@@ -42,3 +42,33 @@ Result srvRegisterClient(Handle handle)
 
 	return cmdbuf[1];
 }
+
+Result srvRegisterPort(Handle handle, const char* name, Handle clientHandle)
+{
+	Result rc = 0;
+	u32* cmdbuf = getThreadCommandBuffer();
+
+	cmdbuf[0] = IPC_MakeHeader(0x6,3,2); // 0x600C2
+	strncpy((char*) &cmdbuf[1], name,8);
+	cmdbuf[3] = strnlen(name, 8);
+	cmdbuf[4] = IPC_Desc_SharedHandles(1);
+	cmdbuf[5] = clientHandle;
+
+	if(R_FAILED(rc = svcSendSyncRequest(handle)))return rc;
+
+	return cmdbuf[1];
+}
+
+Result srvUnregisterPort(Handle handle, const char* name)
+{
+	Result rc = 0;
+	u32* cmdbuf = getThreadCommandBuffer();
+
+	cmdbuf[0] = IPC_MakeHeader(0x7,3,0); // 0x700C0
+	strncpy((char*) &cmdbuf[1], name,8);
+	cmdbuf[3] = strnlen(name, 8);
+
+	if(R_FAILED(rc = svcSendSyncRequest(handle)))return rc;
+
+	return cmdbuf[1];
+}
