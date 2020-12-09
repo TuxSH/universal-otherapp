@@ -11,17 +11,18 @@ This depends on the exploit. The recommended exploit for system versions 2.1 to 
 We leverage a kernel exploit to alter L1 translation tables entries that were never previously accessed, then run `kernelhaxcode_3ds` which does the rest of the job.
 
 * **Below system version 9.3**: we use memchunkhax1
-* **9.3 and above**: we use LazyPixie. As it more or less requires access to `svcReplyAndReceive`, we leverage a variant of `httpwn`:
-    * `httpwn` was believed to be fixed on 11.4, however the heap code being used is still vulnerable at the time of writing (see [here](https://gist.github.com/TuxSH/854b2ba84bd7980be598c3d076dc1fcb))
-    * `LazyPixie` was fixed on 11.12
+* **9.3 and above**: we exploit `sm` then leverage this to exploit `spi`. SPI sysmodule has access to `GPUPROT`, subsequently allowing us to GPU DMA over the kernel memory
+    * **Full writeup coming around Christmas**
+    * This kernel exploit is working even on lastest system version, but we're currently limited by the lack of a public Arm9 exploit for 11.14
+    * `spi` vulnerability has been documented on 3dbrew for years
+    * `sm` vulnerability is an unreported 0day, however I have fixed the bug in Luma3DS's reimpl back in 2017. I believe this is fine to release it now, as the 3DS is EoL and people can use seedminer on latest system version anyway
 
-## Restrictions
+## Testing with Luma3DS
 
-Cannot be directly used by applet (e.g. browser) exploits, need to takeover an application first.
-Need to disable firmlaunch patches if using Luma3DS.
+Need to disable firmlaunch patches & build without custom `sm` sysmodule if using Luma3DS.
 
 ## Credits
 
 * @zoogie: testing and debugging on exotic firmware versions
-* @fincs: LazyPixie exploitation ideas, etc.
+* @fincs: exploitation ideas, etc.
 * @aliaspider: memchunkhax code
