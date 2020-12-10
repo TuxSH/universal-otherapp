@@ -4,7 +4,7 @@ Otherapp payload compatible with system versions 1.0 to 11.3 (all regions, all m
 
 ## Usage
 
-This depends on the exploit. The recommended exploit for system versions 2.1 to 11.13 is [soundhax](https://github.com/nedwill/soundhax), in which case you just have to put `otherapp.bin` onto the root of your SD card.
+This depends on the exploit. The recommended exploit for system versions 1.0 to 11.3 is [soundhax](https://github.com/nedwill/soundhax), in which case you just have to put `otherapp.bin` onto the root of your SD card.
 
 ## Technical details
 
