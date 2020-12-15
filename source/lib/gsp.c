@@ -53,6 +53,12 @@ Result GSPGPU_FlushDataCache(Handle handle, const void* adr, u32 size)
     return cmdbuf[1];
 }
 
+Result gspWriteHwReg32(Handle handle, u32 regPa, u32 value)
+{
+    u32 offset = regPa - 0x10000000; // VA 0x1EB00000
+    return GSPGPU_WriteHWRegs(handle, offset, &value, 4);
+}
+
 // Source: https://github.com/smealum/udsploit/blob/master/source/kernel.c#L11
 void gspSetTextureCopyPhys(Handle handle, u32 outPa, u32 inPa, u32 size, u32 inDim, u32 outDim, u32 flags)
 {

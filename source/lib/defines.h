@@ -7,6 +7,7 @@
 #include "svc.h"
 
 #define TRY(expr)               if(R_FAILED(res = (expr))) return res;
+#define TRY_ALL(expr)           if((res = (expr)) != 0) return res;
 #define KERNEL_VERSION_MAJOR    (*(vu8 *)0x1FF80003)
 #define KERNEL_VERSION_MINOR    (*(vu8 *)0x1FF80002)
 #define IS_N3DS                 (*(vu32 *)0x1FF80030 >= 6) // APPMEMTYPE. Hacky but doesn't use APT

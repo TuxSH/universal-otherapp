@@ -6,7 +6,14 @@ Result GSPGPU_WriteHWRegsWithMask(Handle handle, u32 regAddr, const u32* data, u
 Result GSPGPU_WriteHWRegs(Handle handle, u32 regAddr, const u32* data, u8 size);
 Result GSPGPU_FlushDataCache(Handle handle, const void* adr, u32 size);
 
+Result gspWriteHwReg32(Handle handle, u32 regPa, u32 value);
 void gspSetTextureCopyPhys(Handle handle, u32 outPa, u32 inPa, u32 size, u32 inDim, u32 outDim, u32 flags);
+
+static inline void gspSetLcdFill(Handle handle, bool top, u8 r, u8 g, u8 b)
+{
+    u32 val = BIT(24) | ((u32)b << 16) | ((u32)g << 8) | r;
+    gspWriteHwReg32(handle, top ? 0x10202204 : 0x10202A04, val);
+}
 
 static inline void gspwn(Handle handle, u32 outPa, u32 inPa, u32 size)
 {

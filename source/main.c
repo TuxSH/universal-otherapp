@@ -52,7 +52,7 @@ static Result doExploitChain(ExploitChainLayout *layout, Handle gspHandle, const
         // Exploit sm
         SmpwnContext *ctx = (SmpwnContext *)layout->workBuf;
         Handle srvHandle;
-        TRY(smpwn(&srvHandle, ctx));
+        TRY_ALL(smpwn(&srvHandle, ctx));
         //TRY(smPartiallyCleanupSmpwn(ctx));
         TRY(smRemoveRestrictions(ctx));
 
@@ -67,12 +67,14 @@ static Result doExploitChain(ExploitChainLayout *layout, Handle gspHandle, const
     }
 #endif
 
-    khc3dsLcdDebug(true, 128, 64, 0);
+    khc3dsLcdDebug(true, 128, 64, 0); // brown
     return khc3dsTakeover(payloadFileName, payloadFileOffset);
 }
 
 Result otherappMain(u32 paramBlkAddr)
 {
+    Result res = 0;
+
     const char *arm9PayloadFileName;
     size_t arm9PayloadFileOffset;
 
@@ -88,8 +90,17 @@ Result otherappMain(u32 paramBlkAddr)
         arm9PayloadFileOffset = DEFAULT_PAYLOAD_FILE_OFFSET;
         arm9PayloadFileName = DEFAULT_PAYLOAD_FILE_NAME;
     }
-
     ExploitChainLayout *layout = (ExploitChainLayout *)((paramBlkAddr + 0x1000) & ~0xFFF);
 
-    return doExploitChain(layout, gspHandle, arm9PayloadFileName, arm9PayloadFileOffset);
+    // Set top screen fill white
+    gspSetLcdFill(gspHandle, true, 255, 255, 255);
+
+    // Set top priority for our thread
+    TRY(svcSetThreadPriority(CUR_THREAD_HANDLE, 0x18));
+
+    res = doExploitChain(layout, gspHandle, arm9PayloadFileName, arm9PayloadFileOffset);
+    if (res != 0) {
+        gspSetLcdFill(gspHandle, false, 255, 0, 0);
+    }
+    return res;
 }

