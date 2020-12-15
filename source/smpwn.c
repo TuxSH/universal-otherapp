@@ -3,7 +3,7 @@
 #include "lib/MyThread.h"
 
 #define SMPWN_VICTIM_SERVICE_NAME           "pxi:dev"
-#define SMPWN_VICTIM_SERVICE_MAX_SESSIONS   1
+#define SMPWN_VICTIM_SERVICE_MAX_SESSIONS   2
 #define SMPWN_THREAD_STACK_SIZE             0x200
 
 typedef struct SmConstants {
