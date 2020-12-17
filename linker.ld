@@ -3,15 +3,22 @@ ENTRY(_start)
 
 MEMORY
 {
-    RAMRO (rx) : ORIGIN = 0x00101000, LENGTH = 0x0000C000
-    RAMRW (rw!i) : ORIGIN = 0x8000000, LENGTH = 0x00100000
+    /* This address will always crash should it be actually referenced. */
+    RAMRO (rx) : ORIGIN = 0x70000000, LENGTH = 0x00008000
 }
 
 SECTIONS
 {
-    .text : ALIGN(4)
+    . = ORIGIN(RAMRO);
+
+    .crt0 ALIGN(4) :
     {
         *(.crt0*)
+        . = ALIGN(4);
+    } >RAMRO
+
+    .text ALIGN(4) :
+    {
         *(.text*)
         . = ALIGN(4);
     } >RAMRO
@@ -21,5 +28,5 @@ SECTIONS
         *(.rodata*)
         . = ALIGN(4);
     } >RAMRO
-    
+
 }

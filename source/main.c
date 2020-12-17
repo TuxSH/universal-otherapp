@@ -10,8 +10,6 @@
 #include "spipwn.h"
 #include "kernel_gspwn.h"
 
-#include "kernelhaxcode_3ds_bin.h"
-
 #ifndef DEFAULT_PAYLOAD_FILE_OFFSET
 #define DEFAULT_PAYLOAD_FILE_OFFSET 0
 #endif
@@ -26,17 +24,21 @@ typedef union ExploitChainLayout {
 
 static_assert(sizeof(ExploitChainLayout) == 0x10000);
 
-static void prepareBlobLayout(BlobLayout *layout, Handle gspHandle)
+static void prepareBlobLayout(BlobLayout *layout, Handle gspHandle, const u8 *khc3dsBin, size_t khc3dsBinSize)
 {
     memset(layout, 0, sizeof(BlobLayout));
-    memcpy(layout->code, kernelhaxcode_3ds_bin, kernelhaxcode_3ds_bin_size);
+    memcpy(layout->code, khc3dsBin, khc3dsBinSize);
     khc3dsPrepareL2Table(layout);
 
     // Ensure everything (esp. the layout) is written back into the main memory
     gspDoFullCleanInvCacheTrick(gspHandle);
 }
 
-static Result doExploitChain(ExploitChainLayout *layout, Handle gspHandle, const char *payloadFileName, size_t payloadFileOffset)
+static Result doExploitChain(
+    ExploitChainLayout *layout, Handle gspHandle,
+    const char *payloadFileName, size_t payloadFileOffset,
+    const u8 *khc3dsBin, size_t khc3dsBinSize
+)
 {
     Result res = 0;
 
@@ -45,7 +47,7 @@ static Result doExploitChain(ExploitChainLayout *layout, Handle gspHandle, const
         // Below 9.3 -- memchunkhax
         TRY(memchunkhax(layout->workBuffer, gspHandle));
 
-        prepareBlobLayout(&layout->blobLayout, gspHandle);
+        prepareBlobLayout(&layout->blobLayout, gspHandle, khc3dsBin, khc3dsBinSize);
         mapL2TableViaSvc0x7b(&layout->blobLayout);
 
         // https://developer.arm.com/docs/ddi0360/e/memory-management-unit/hardware-page-table-translation
@@ -71,7 +73,7 @@ static Result doExploitChain(ExploitChainLayout *layout, Handle gspHandle, const
         TRY(spipwn(srvHandle));
 
         // We can now GPU DMA the kernel. Let's map the L2 table we have prepared
-        prepareBlobLayout(&layout->blobLayout, gspHandle);
+        prepareBlobLayout(&layout->blobLayout, gspHandle, khc3dsBin, khc3dsBinSize);
         mapL2TableViaGpuDma(&layout->blobLayout, layout->blobLayout.smallWorkBuffer, gspHandle);
 
         svcCloseHandle(srvHandle);
@@ -82,7 +84,7 @@ static Result doExploitChain(ExploitChainLayout *layout, Handle gspHandle, const
     return khc3dsTakeover(payloadFileName, payloadFileOffset);
 }
 
-Result otherappMain(u32 paramBlkAddr)
+Result otherappMain(u32 paramBlkAddr, const u8 *khc3dsBin, size_t khc3dsBinSize)
 {
     Result res = 0;
 
@@ -109,7 +111,7 @@ Result otherappMain(u32 paramBlkAddr)
     // Set top priority for our thread
     TRY(svcSetThreadPriority(CUR_THREAD_HANDLE, 0x18));
 
-    res = doExploitChain(layout, gspHandle, arm9PayloadFileName, arm9PayloadFileOffset);
+    res = doExploitChain(layout, gspHandle, arm9PayloadFileName, arm9PayloadFileOffset, khc3dsBin, khc3dsBinSize);
     if (res != 0) {
         gspSetLcdFill(gspHandle, false, 255, 0, 0);
     }
