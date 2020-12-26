@@ -120,7 +120,4 @@ void mapL2TableViaSvc0x7b(const BlobLayout *layout)
     // Do the thing:
     *scratch = (u32)layout;
     svcBackdoor(kMapL2Table);
-
-    __dsb();
-    __flush_prefetch_buffer();
 }

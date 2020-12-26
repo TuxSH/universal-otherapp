@@ -48,3 +48,11 @@ Result smPartiallyCleanupSmpwn(const SmpwnContext *ctx);
  * @post Any process can now have access to any service AND get new srv:pm session handles.
  */
 Result smRemoveRestrictions(const SmpwnContext *ctx);
+
+/**
+ * @brief Leverages LazyPixie (< sysver 11.12) to map KHC's L2 table.
+ * @pre \ref smpwn has been called.
+ * @param ctx Context.
+ * @param layout KHC data (in LINEAR memory).
+ */
+Result smMapL2TableViaLazyPixie(const SmpwnContext *ctx, const BlobLayout *layout);
