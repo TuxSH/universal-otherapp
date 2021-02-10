@@ -54,6 +54,10 @@ static Result doExploitChain(
     u8 kernelVersionMinor = KERNEL_VERSION_MINOR;
     if (kernelVersionMinor < 48) {
         // Below 9.3 -- memchunkhax
+
+        // Fill top screen gray
+        gspSetLcdFill(gspHandle, true, 128, 128, 128);
+
         TRY(memchunkhax(layout->workBuffer, gspHandle));
 
         prepareBlobLayout(&layout->blobLayout, gspHandle, khc3dsBin, khc3dsBinSize);
@@ -71,26 +75,36 @@ static Result doExploitChain(
         SmpwnContext *ctx = (SmpwnContext *)layout->blobLayout.smallWorkBuffer;
         Handle srvHandle;
 
+        // Fill top screen white
+        gspSetLcdFill(gspHandle, true, 255, 255, 255);
+
         prepareBlobLayout(&layout->blobLayout, gspHandle, khc3dsBin, khc3dsBinSize);
 
         TRY_ALL(smpwn(&srvHandle, ctx));
         //TRY(smPartiallyCleanupSmpwn(ctx));
 
-        if (kernelVersionMinor < 56) {
-            // Do LazyPixie
-            // This is better than spipwn, in case the user has mismatching versions of titles
+        // Fill top screen blue-ish.
+        gspSetLcdFill(gspHandle, true, 128, 128, 200);
+
+        if (false) { //(kernelVersionMinor < 56) { // (unstable, disabled)
+            // Do LazyPixie. This is unreliable. NOTE: this code path doesn't handle being run from core2 or core3.
+            // KHC L2 table is only mapped for core0 at first, then we GPU DMA over kernel memory.
             TRY(smMapL2TableViaLazyPixie(ctx, &layout->blobLayout));
             ensurePageTableCoherency(gspHandle);
+
+            // Set CFG11_GPUPROT = 0
+            *(vu32 *)(KHC3DS_MAP_ADDR + 0xA2000 + 0x140) = 0;
+            __dsb();
         } else {
             TRY(smRemoveRestrictions(ctx));
 
             // We now have access to all services, and can spawn new sessions of srv:pm
             // Exploit spi with that.
             TRY(spipwn(srvHandle));
-
-            // We can now GPU DMA the kernel. Let's map the L2 table we have prepared
-            mapL2TableViaGpuDma(&layout->blobLayout, layout->blobLayout.smallWorkBuffer, gspHandle);
         }
+
+        // We can now GPU DMA the kernel. Let's map the L2 table we have prepared
+        mapL2TableViaGpuDma(&layout->blobLayout, layout->blobLayout.smallWorkBuffer, gspHandle);
 
         svcCloseHandle(srvHandle);
     }
@@ -120,16 +134,6 @@ Result otherappMain(u32 paramBlkAddr, const u8 *khc3dsBin, size_t khc3dsBinSize)
         arm9PayloadFileName = DEFAULT_PAYLOAD_FILE_NAME;
     }
     ExploitChainLayout *layout = (ExploitChainLayout *)((paramBlkAddr + 0x1000) & ~0xFFF);
-
-    // Set top screen fill: gray (< 9.3), blueish (< 11.12), or white
-    u8 kernelVersionMinor = KERNEL_VERSION_MINOR;
-    if (kernelVersionMinor < 48) {
-        gspSetLcdFill(gspHandle, true, 128, 128, 128);
-    } else if (kernelVersionMinor < 56) {
-        gspSetLcdFill(gspHandle, true, 128, 128, 200);
-    } else {
-        gspSetLcdFill(gspHandle, true, 255, 255, 255);
-    }
 
     // Set top priority for our thread
     TRY(svcSetThreadPriority(CUR_THREAD_HANDLE, 0x18));

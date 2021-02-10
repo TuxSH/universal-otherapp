@@ -50,7 +50,7 @@ Result smPartiallyCleanupSmpwn(const SmpwnContext *ctx);
 Result smRemoveRestrictions(const SmpwnContext *ctx);
 
 /**
- * @brief Leverages LazyPixie (< sysver 11.12) to map KHC's L2 table.
+ * @brief Leverages LazyPixie (< sysver 11.12) to map KHC's L2 table (but only for core0 and core1).
  * @pre \ref smpwn has been called.
  * @param ctx Context.
  * @param layout KHC data (in LINEAR memory).

