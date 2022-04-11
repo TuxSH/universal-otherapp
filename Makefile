@@ -40,7 +40,8 @@ ifneq ($(MEMCHUNKHAX_ONLY),)
 	DEFINES += -DMEMCHUNKHAX_ONLY
 endif
 
-ARCH	:=	-march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft -fPIC
+FALSEPOSITIVES := -Wno-array-bounds -Wno-stringop-overflow -Wno-stringop-overread
+ARCH	:=	-march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft -fPIC $(FALSEPOSITIVES)
 
 CFLAGS	:=	-g -Wall -Wextra -Wno-main -Os -mword-relocations -fomit-frame-pointer \
 			-ffunction-sections -fdata-sections \
