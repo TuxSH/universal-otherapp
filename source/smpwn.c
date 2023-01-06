@@ -2,6 +2,8 @@
 #include "lib/srv.h"
 #include "lib/MyThread.h"
 
+// Fixed in system version 11.16 :(
+
 #define SMPWN_VICTIM_SERVICE_NAME           "pxi:dev"
 #define SMPWN_VICTIM_SERVICE_MAX_SESSIONS   2
 #define SMPWN_THREAD_STACK_SIZE             0x80

@@ -1,6 +1,6 @@
 # universal-otherapp
 
-Otherapp payload compatible with system versions 1.0 to 11.14 (all regions, all models) that leverages full exploit chains to ultimately execute a payload from the SD card.
+Otherapp payload compatible with system versions 1.0 to 11.15 (all regions, all models) that leverages full exploit chains to ultimately execute a payload from the SD card.
 
 ## Usage
 
@@ -11,11 +11,10 @@ This depends on the exploit. The recommended exploit for system versions 1.0 to 
 We leverage a kernel exploit to alter L1 translation tables entries that were never previously accessed, then run `kernelhaxcode_3ds` which does the rest of the job.
 
 * **Below system version 9.3**: we use memchunkhax1
-* **9.3 and above**: we exploit `sm` then leverage this to exploit `spi`. SPI sysmodule has access to `GPUPROT`, subsequently allowing us to GPU DMA over the kernel memory
-    * **Full writeup coming around Christmas**
-    * `spi` vulnerability has been documented on 3dbrew for years
-    * `sm` vulnerability is an unreported 0day, however I have fixed the bug in Luma3DS's reimpl back in 2017. I believe this is fine to release it now, as the 3DS is EoL and people can use seedminer on latest system version anyway
-    * `safehax` or `agbhax` used depending on version
+* **9.3 to 11.15**: we exploit `sm` then leverage this to exploit `spi`. SPI sysmodule has access to `GPUPROT`, subsequently allowing us to GPU DMA over the kernel memory
+    * `spi` vulnerability has been documented on 3dbrew for years, and hasn't yet been fixed
+    * `sm` vulnerability is an unreported 0day. Fixed in system version 11.16
+    * `safehax` or `agbhax` used depending on version. `agbhax` hasn't yet been fixed
 
 ## Testing with Luma3DS
 
